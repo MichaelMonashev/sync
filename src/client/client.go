@@ -21,16 +21,18 @@ type responce struct {
 }
 
 type command struct {
-	id           commandId     // уникальный номер команды
-	key          string        // ключ
-	ttl          time.Duration // на сколько лочим ключ
-	timeout      time.Duration // за какое время надо попытаться выполнить команду
-	resp         chan error    // канал, в который пишется ответ от ноды
-	retries      int32         // количество запросов к нодам, прежде чем вернуть ошибку
-	client       *Client       // ссылка на клиента для чтения списка нод и retries
-	current_node *node         // нода, которая обработывает текущего запрос
-	timer        *time.Timer   // таймер текущего запроса
-	code         byte          // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
+	id           commandId      // уникальный номер команды
+	key          string         // ключ
+	ttl          time.Duration  // на сколько лочим ключ
+	timeout      time.Duration  // за какое время надо попытаться выполнить команду
+	resp_chan    chan error     // канал, в который пишется ответ от ноды
+	send_chan    chan *node     // канал, в который пишется нода, на которую надо послать запрос
+	process_chan chan *responce // канал, в который пишется ответ от ноды, который надо обработать
+	retries      int32          // количество запросов к нодам, прежде чем вернуть ошибку
+	client       *Client        // ссылка на клиента для чтения списка нод и retries
+	current_node *node          // нода, которая обработывает текущего запрос
+	timer        *time.Timer    // таймер текущего запроса
+	code         byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
 
 // коды команд
@@ -79,7 +81,7 @@ func code2string(code byte) string {
 	case PONG:
 		return "PONG"
 	default:
-		fmt.Fprintln(os.Stderr,"Wrong code:", fmt.Sprint(code))
+		fmt.Fprintln(os.Stderr, "Wrong code:", fmt.Sprint(code))
 		return ""
 	}
 }
@@ -540,16 +542,22 @@ func errorln(a ...interface{}) error {
 func acquire_command() *command {
 	c := command_pool.Get()
 	if c == nil {
+		timer := time.NewTimer(time.Hour) // ??? как иначе создать таймер с каналом C != nil?
+		timer.Stop()
 		return &command{
-			resp:    make(chan error),
-			retries: 0,
+			resp_chan:    make(chan error),
+			send_chan:    make(chan *node, 2),
+			process_chan: make(chan *responce),
+			timer:        timer,
+			retries:      0,
 		}
 	}
 	return c.(*command)
 }
 
 func release_command(c *command) {
-	atomic.StoreInt32(&c.retries, 0)
+	//atomic.StoreInt32(&c.retries, 0)
+	c.retries = 0
 	command_pool.Put(c)
 }
 
@@ -578,7 +586,9 @@ var (
 )
 
 func (command *command) is_enough_retries() bool {
-	return atomic.AddInt32(&command.retries, 1) >= command.client.retries
+	//return atomic.AddInt32(&command.retries, 1) >= command.client.retries
+	command.retries++
+	return command.retries >= command.client.retries
 }
 
 func (client *Client) run_command(key string, command_id commandId, ttl time.Duration, command_code byte, timeout time.Duration) error {
@@ -595,9 +605,32 @@ func (client *Client) run_command(key string, command_id commandId, ttl time.Dur
 
 	client.working_commands.add(command)
 
-	command.send(nil)
+	go command.run()
+	command.send_chan <- nil
 
-	return <-command.resp
+	return <-command.resp_chan
+}
+
+func (command *command) run() {
+	for {
+		select {
+		case <-command.client.done:
+			return
+
+		case node := <-command.send_chan:
+			command.send(node)
+
+		case <-command.timer.C:
+			if command.on_timeout() {
+				return
+			}
+
+		case resp := <-command.process_chan:
+			if command.process(resp) {
+				return
+			}
+		}
+	}
 }
 
 func (command *command) send(node *node) {
@@ -610,14 +643,14 @@ func (command *command) send(node *node) {
 			if err != nil { // некуда отправлять команду, поэтому сразу возвращаем ошибку
 
 				command.client.working_commands.delete(command.id)
-				command.resp <- err
+				command.resp_chan <- err
 				return
 			}
 		}
 
 		command.current_node = node
 
-		command.timer = time.AfterFunc(node.timeout(), command.on_timeout)
+		command.timer.Reset(node.timeout())
 
 		err = write(node.conn, command)
 		if err == nil { // если нет ощибки, то выходим из функции и ждём прихода ответа или срабатывания таймера
@@ -630,7 +663,7 @@ func (command *command) send(node *node) {
 		if command.is_enough_retries() {
 
 			command.client.working_commands.delete(command.id)
-			command.resp <- errorln("Too much retries. Last error:", err)
+			command.resp_chan <- errorln("Too much retries. Last error:", err)
 			return
 		}
 		node = nil // чтобы выбрать другую ноду
@@ -638,15 +671,66 @@ func (command *command) send(node *node) {
 }
 
 // функция, вызывается, когда истёт таймаут на приход ответа от ноды
-func (command *command) on_timeout() {
+func (command *command) on_timeout() bool {
 	command.current_node.fail()
 
 	if command.is_enough_retries() {
 		command.client.working_commands.delete(command.id)
-		command.resp <- errors.New("Too much retries. Last error: last request timeouted.")
+		command.resp_chan <- errors.New("Too much retries. Last error: last request timeouted.")
 	} else {
-		command.send(nil)
+		command.send_chan <- nil
+		return false
 	}
+	return true
+}
+
+func (command *command) process(resp *responce) bool {
+	command.timer.Stop()
+
+	switch resp.code {
+	case OK:
+		command.current_node.ok()
+		command.client.working_commands.delete(command.id)
+		command.resp_chan <- nil
+
+	case REDIRECT:
+		command.current_node.ok()
+		if command.is_enough_retries() {
+			command.client.working_commands.delete(command.id)
+			command.resp_chan <- errors.New("Too much retries.")
+		} else {
+			command.send_chan <- command.client.node_by_id(resp.node_id)
+			return false
+		}
+
+	case TIMEOUT:
+		command.current_node.ok()
+		command.client.working_commands.delete(command.id)
+		command.resp_chan <- errors.New("Timeout exceeded.")
+
+	case BUSY:
+		command.current_node.fail()
+
+		if command.is_enough_retries() {
+			command.client.working_commands.delete(command.id)
+			command.resp_chan <- errors.New("Too much retries. Last error: Server busy. Load too high.")
+		} else { // пробуем другую ноду
+			command.send_chan <- nil
+			return false
+		}
+
+	case ERROR:
+		command.current_node.ok()
+		command.client.working_commands.delete(command.id)
+		command.resp_chan <- errors.New(resp.description)
+
+	default:
+		command.resp_chan <- errors.New("Wrong command type.")
+	}
+
+	release_responce(resp)
+
+	return true
 }
 
 //  горутины (по числу нод) читают ответы из своих соединений и направляют их в канал ответов
@@ -662,7 +746,7 @@ func (client *Client) read_responces(node *node) {
 		}
 
 		// таймаут нужен для того, чтобы можно было корректно закончить работу клиента
-		responce, err := read_with_timeout(conn, time.Second)
+		resp, err := read_with_timeout(conn, time.Second)
 
 		// если произошёл таймаут или ошибка временная
 		if neterr, ok := err.(*net.OpError); ok {
@@ -679,7 +763,7 @@ func (client *Client) read_responces(node *node) {
 			time.Sleep(100 * time.Millisecond)
 
 		} else {
-			client.responces <- responce
+			client.responces <- resp
 		}
 	}
 }
@@ -715,63 +799,21 @@ func (client *Client) run() {
 		select {
 		case <-client.done:
 			return
-		case responce := <-client.responces:
-			if responce.code == OPTIONS {
+		case resp := <-client.responces:
+			if resp.code == OPTIONS {
 				// переконфигурация: новый список нод, новый уникальный command_id
 				// ToDo написать переконфигурацию
-				release_responce(responce)
+				release_responce(resp)
 				continue
 			}
 
-			command, ok := client.working_commands.get(responce.id)
+			command, ok := client.working_commands.get(resp.id)
 			// если команда не нашлась по Id, то ждём следующую
 			if !ok {
-				release_responce(responce)
+				release_responce(resp)
 				continue
 			}
-
-			command.timer.Stop()
-
-			switch responce.code {
-			case OK:
-				command.current_node.ok()
-				client.working_commands.delete(command.id)
-				command.resp <- nil
-
-			case REDIRECT:
-				command.current_node.ok()
-				if command.is_enough_retries() {
-					client.working_commands.delete(command.id)
-					command.resp <- errors.New("Too much retries.")
-				} else {
-					go command.send(command.client.node_by_id(responce.node_id))
-				}
-
-			case TIMEOUT:
-				command.current_node.ok()
-				client.working_commands.delete(command.id)
-				command.resp <- errors.New("Timeout exceeded.")
-
-			case BUSY:
-				command.current_node.fail()
-
-				if command.is_enough_retries() {
-					client.working_commands.delete(command.id)
-					command.resp <- errors.New("Too much retries. Last error: Server busy. Load too high.")
-				} else { // пробуем другую ноду
-					go command.send(nil)
-				}
-
-			case ERROR:
-				command.current_node.ok()
-				client.working_commands.delete(command.id)
-				command.resp <- errors.New(responce.description)
-
-			default:
-				command.resp <- errors.New("Wrong command type.")
-			}
-
-			release_responce(responce)
+			command.process_chan <- resp
 		}
 	}
 }
