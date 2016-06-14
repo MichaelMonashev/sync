@@ -178,7 +178,6 @@ func (client *Client) node() (*node, error) {
 
 	if client.nodes.current != nil {
 		if atomic.LoadUint32(&client.nodes.current.fails) == 0 {
-			client.nodes.Unlock()
 			return client.nodes.current, nil
 		}
 	}
