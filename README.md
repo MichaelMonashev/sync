@@ -2,8 +2,6 @@
 
 Golang client library for reliable distributed lock-servers.
 
-----------
-
 ##Example usage
 
 Start mock-servers:
