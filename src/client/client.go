@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -159,55 +158,40 @@ func (client *Client) command_id() commandId {
 	}
 }
 
-type by_fails []node
-
-func (a by_fails) Len() int {
-	return len(a)
-}
-func (a by_fails) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-func (a by_fails) Less(i, j int) bool {
-	//	if a[i].fails == a[j].fails {
-	//		return a[i].id < a[j].id
-	//	}
-	return a[i].fails < a[j].fails
-}
-
 func (client *Client) node() (*node, error) {
 	client.nodes.Lock()
 	defer client.nodes.Unlock()
 
 	if client.nodes.current != nil {
-		if atomic.LoadUint32(&client.nodes.current.fails) == 0 {
+		if atomic.LoadUint32(&client.nodes.current.fails) == 0 { // ToDo переписать. при множестве потерь пакетов это условие редко срабатывает и каждый раз делается перебор нод
 			return client.nodes.current, nil
 		}
 	}
 
-	// копируем в массив для сортировки
-	var client_nodes by_fails
+	var best_value uint32
+	var best_node *node
 	for _, n := range client.nodes.m {
 		// пропускаем несоединившиеся ноды и текущую ноду
 		if n.conn != nil && client.nodes.current != n {
-			client_nodes = append(client_nodes, node{ // чтобы избежать при сортировке atomic.Load()
-				id:    n.id,
-				fails: atomic.LoadUint32(&n.fails),
-				mtu:   n.mtu,
-				rtt:   n.rtt,
-			})
+
+			if best_node == nil {
+				best_value = atomic.LoadUint32(&n.fails)
+				best_node = n
+			} else {
+				cur_value := atomic.LoadUint32(&n.fails)
+				if best_value < cur_value {
+					best_value = cur_value
+					best_node = n
+				}
+			}
 		}
 	}
 
-	sort.Sort(client_nodes)
-
-	//	for _, node := range client_nodes {
-	//		say(node.id,node.fails)
-	//	}
-
-	for _, node := range client_nodes {
-		client.nodes.current = client.nodes.m[node.id]
+	if best_node != nil {
+		client.nodes.current = best_node
 		return client.nodes.current, nil
 	}
+
 	return nil, errors.New("No working nodes.")
 }
 
@@ -261,16 +245,40 @@ func (client *Client) Lock(key string) (*Lock, error) {
 
 	err := client.run_command(key, command_id, ttl, LOCK, timeout)
 	if err == nil {
-		return &Lock{
-				key:        key,
-				client:     client,
-				command_id: command_id,
-				timeout:    timeout,
-			},
-			nil
+		lock := acquire_lock()
+
+		lock.key = key
+		lock.client = client
+		lock.command_id = command_id
+		lock.timeout = timeout
+
+		return lock, nil
 	}
 	return nil, err
 }
+
+// возвращает память, занятую блокировкой
+func (client *Client) ReleaseLock(lock *Lock) error { // ??? может объединить с lock.Unlock() ?
+	if lock == nil {
+		return errors.New("Try to release nil lock.")
+	}
+	release_lock(lock)
+	return nil
+}
+
+func acquire_lock() *Lock {
+	l := lock_pool.Get()
+	if l == nil {
+		return &Lock{}
+	}
+	return l.(*Lock)
+}
+
+func release_lock(l *Lock) {
+	lock_pool.Put(l)
+}
+
+var lock_pool sync.Pool
 
 type Lock struct {
 	key        string
@@ -296,17 +304,17 @@ func write_with_timeout(conn *net.UDPConn, command *command, timeout time.Durati
 }
 
 func write(conn *net.UDPConn, command *command) error {
-	buf := acquire_byte_buffer()
-	defer release_byte_buffer(buf)
+	b := acquire_byte_buffer()
+	defer release_byte_buffer(b)
 
-	buf_size, err := command.marshal(buf)
+	buf_size, err := command.marshal(b.buf)
 	if err != nil {
 		return err
 	}
-	buf = buf[0:buf_size]
+	b.buf = b.buf[0:buf_size]
 
 	// say ("Send", len(msg), "bytes:", command, "from", conn.LocalAddr(), "to", conn.RemoteAddr(), "via", conn)
-	n, err := conn.Write(buf[0:buf_size])
+	n, err := conn.Write(b.buf[0:buf_size])
 	if err != nil {
 		return err
 	}
@@ -325,17 +333,17 @@ func read_with_timeout(conn *net.UDPConn, timeout time.Duration) (*responce, err
 
 func read(conn *net.UDPConn) (*responce, error) {
 
-	buf := acquire_byte_buffer()
-	defer release_byte_buffer(buf)
+	b := acquire_byte_buffer()
+	defer release_byte_buffer(b)
 
-	n, err := conn.Read(buf)
+	n, err := conn.Read(b.buf)
 	// say ("Received", n, "bytes from", conn.RemoteAddr())
 	if err != nil {
 		return nil, err
 	}
 
 	responce := acquire_responce()
-	err = responce.unmarshal(buf[:n])
+	err = responce.unmarshal(b.buf[:n])
 	if err != nil {
 		release_responce(responce)
 		return nil, err
@@ -460,19 +468,26 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 const default_byte_buffer_size = 508
 
-func acquire_byte_buffer() []byte {
+var byte_buffer_pool sync.Pool
+
+func acquire_byte_buffer() *byte_buffer {
 	v := byte_buffer_pool.Get()
 	if v == nil {
-		return make([]byte, default_byte_buffer_size)
+		return &byte_buffer{
+			buf: make([]byte, default_byte_buffer_size),
+		}
 	}
-	return v.([]byte)
+	return v.(*byte_buffer)
 }
 
-func release_byte_buffer(b []byte) {
-	byte_buffer_pool.Put(b[0:default_byte_buffer_size])
+func release_byte_buffer(b *byte_buffer) {
+	b.buf = b.buf[0:default_byte_buffer_size]
+	byte_buffer_pool.Put(b)
 }
 
-var byte_buffer_pool sync.Pool
+type byte_buffer struct {
+	buf []byte
+}
 
 func (command *command) marshal(buf []byte) (int, error) {
 
@@ -752,14 +767,15 @@ func (client *Client) read_responces(node *node) {
 		if neterr, ok := err.(*net.OpError); ok {
 			if neterr.Timeout() {
 				continue
-			} else if neterr.Temporary() {
+			} else if neterr.Temporary() { // ?? что такое временная ошибка?
+				node.fail()
 				continue
 			}
 		}
 
 		if err != nil {
-			// не ясно из-за чего сюда можем попасть и как быть?
-			fmt.Fprintln(os.Stderr, err)
+			// пример ошибки: read udp 127.0.0.1:19858->127.0.0.1:3002: read: connection refused
+			node.fail()
 			time.Sleep(100 * time.Millisecond)
 
 		} else {
@@ -819,7 +835,7 @@ func (client *Client) run() {
 }
 
 type working_commands struct {
-	sync.Mutex
+	sync.RWMutex
 	m map[commandId]*command
 }
 
@@ -830,8 +846,8 @@ func (wc *working_commands) add(command *command) {
 }
 
 func (wc *working_commands) get(command_id commandId) (*command, bool) {
-	wc.Lock()
-	defer wc.Unlock()
+	wc.RLock()
+	defer wc.RUnlock()
 
 	command, ok := wc.m[command_id]
 	return command, ok
