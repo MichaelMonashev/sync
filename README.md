@@ -1,6 +1,6 @@
 #Go client to lock server
 
-Golang client library for reliable distributed lock-servers.
+Golang client library for reliable distributed lock-servers. Zero memory allocation. Goroutine-safe.
 
 ##Usage
 
@@ -11,10 +11,6 @@ Start mock-servers:
     $ go run mosk_server3.go &
 
 
-Start main.go for go-client load testing:
+Start main.go for load testing:
 
     $ go run main.go
- 
-or
-
-    $ go run -race main.go
