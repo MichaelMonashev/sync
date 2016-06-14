@@ -344,7 +344,6 @@ func read(conn *net.UDPConn) (*responce, error) {
 }
 
 func (responce *responce) unmarshal(buf []byte) error {
-	defer release_byte_buffer(buf)
 
 	if len(buf) > 508 || len(buf) < 32 {
 		return errorln("wrong data size", len(buf))
