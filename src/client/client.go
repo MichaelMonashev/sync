@@ -1035,5 +1035,5 @@ func open_conn(addr string, read_buffer_size int, write_buffer_size int) (*net.U
 }
 
 func (client *Client) Close() {
-	client.done <- struct{}{}
+	close(client.done )
 }
