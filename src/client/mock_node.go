@@ -45,7 +45,7 @@ func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, d
 
 		b := acquire_byte_buffer()
 
-		// deadline нужен чтобы можно было завершить выйти из цикла и завершить работу
+		// deadline нужен чтобы можно было выйти из цикла и завершить работу
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, addr, err := conn.ReadFromUDP(b.buf)
 

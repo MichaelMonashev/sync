@@ -251,17 +251,19 @@ func (client *Client) Lock(key string) (*Lock, error) {
 	command_id := client.command_id()
 
 	err := client.run_command(key, command_id, ttl, LOCK, timeout)
-	if err == nil {
-		lock := acquire_lock()
-
-		lock.key = key
-		lock.client = client
-		lock.command_id = command_id
-		lock.timeout = timeout
-
-		return lock, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+
+	lock := acquire_lock()
+
+	lock.key = key
+	lock.client = client
+	lock.command_id = command_id
+	lock.timeout = timeout
+
+	return lock, nil
+
 }
 
 func acquire_lock() *Lock {
