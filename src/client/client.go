@@ -226,11 +226,6 @@ func (client *Client) RLock(key string) (*Lock, error) {
 	return client.Lock(key) // ToDo переделать
 }
 
-// за время timeout снять ранее установленную блокировку на чтение
-func (lock *Lock) RUnlock() error {
-	return lock.Unlock() // ToDo переделать
-}
-
 // снять все блокировки
 func (client *Client) UnlockAll() error {
 	return errors.New("UnlockAll() has not yet implemented.")
@@ -257,15 +252,6 @@ func (client *Client) Lock(key string) (*Lock, error) {
 	return nil, err
 }
 
-// возвращает память, занятую блокировкой
-func (client *Client) ReleaseLock(lock *Lock) error { // ??? может объединить с lock.Unlock() ?
-	if lock == nil {
-		return errors.New("Try to release nil lock.")
-	}
-	release_lock(lock)
-	return nil
-}
-
 func acquire_lock() *Lock {
 	l := lock_pool.Get()
 	if l == nil {
@@ -287,13 +273,19 @@ type Lock struct {
 	timeout    time.Duration
 }
 
-// обновить таймаут у существующей блокировки
-func (lock *Lock) Update(ttl time.Duration, timeout time.Duration) error {
-	return errors.New("Update() has not yet implemented.")
+// Возвращает ключ, по которому произошла блокировка. Удоббен в LochEach() и LocjAny()
+func (lock *Lock) Key() string {
+	return lock.key
 }
 
 // за время timeout снять ранее установленную блокировку
-func (lock *Lock) Unlock() error {
+func (client *Client) Unlock(lock *Lock) error {
+	if lock == nil {
+		return errors.New("Try to release nil lock.")
+	}
+
+	defer release_lock(lock)
+
 	return lock.client.run_command(lock.key, lock.command_id, 0, UNLOCK, lock.timeout)
 }
 
@@ -1035,5 +1027,5 @@ func open_conn(addr string, read_buffer_size int, write_buffer_size int) (*net.U
 }
 
 func (client *Client) Close() {
-	close(client.done )
+	close(client.done)
 }
