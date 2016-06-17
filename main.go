@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-
 	//for i := 1; i <= 3; i++ {
 	//	err := client.Mock_start_node(uint64(i), map[uint64]string{
 	//		1: "127.0.0.1:3001",
@@ -54,15 +53,9 @@ func load(n int, locker *client.Client) {
 			fmt.Println("Error while lock key:", key, "error:", err)
 			continue
 		}
-		err = lock.Unlock()
+		err = locker.Unlock(lock)
 		if err != nil {
-			fmt.Println("Error while lock key:", key, "error:", err)
-			continue
-		}
-
-		err = locker.ReleaseLock(lock)
-		if err != nil {
-			fmt.Println("Error while release lock. Key:", key, "error:", err)
+			fmt.Println("Error while unlock key:", key, "error:", err)
 			continue
 		}
 	}
