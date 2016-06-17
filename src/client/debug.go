@@ -44,7 +44,7 @@ func (c commandId) String() string {
 }
 
 func (node node) String() string {
-	return fmt.Sprintf("%v:%v-%v", node.id, node.addr, node.fails)
+	return fmt.Sprintf("%v-%v fails:%v mtu:%v rtt:%v", node.id, node.addr, node.fails, node.mtu, node.rtt)
 }
 
 func warn(a ...interface{}) {
