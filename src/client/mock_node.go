@@ -3,34 +3,57 @@ package client
 import (
 	"encoding/binary"
 	"fmt"
-	//"math/rand"
 	"net"
+	"time"
+	//"math/rand"
 	//"time"
 )
 
-func Mock_start_node(node_id uint64, mosk_nodes map[uint64]string) error {
+func Mock_start_node(node_id uint64, mosk_nodes map[uint64]string) (chan bool, error) {
 
 	addr, err := net.ResolveUDPAddr("udp", mosk_nodes[node_id])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	go mock_run(conn, node_id, mosk_nodes)
 
-	return nil
+	done := make(chan bool)
+
+	go mock_run(conn, node_id, mosk_nodes, done)
+
+	return done, nil
 }
 
-func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string) {
+func Mock_stop_node(done chan bool) {
+	close(done)
+	time.Sleep(200 * time.Millisecond) // ждём, пока закончится цикл в mock_run()
+}
+
+func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, done chan bool) {
 	for {
+		// выходим из цикла, если надо закончить свою работу
+		select {
+		case <-done:
+			conn.Close()
+			return
+		default:
+		}
+
 		b := acquire_byte_buffer()
 
+		// deadline нужен чтобы можно было завершить выйти из цикла и завершить работу
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, addr, err := conn.ReadFromUDP(b.buf)
+
 		if err != nil {
-			warn(err)
+			// если произошёл не таймаут, а что-то другое
+			if neterr, ok := err.(*net.OpError); !ok || !neterr.Timeout() {
+				warn(err)
+			}
 			continue
 		}
 
