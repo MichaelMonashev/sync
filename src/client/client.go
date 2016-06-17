@@ -191,7 +191,7 @@ func (client *Client) node() (*node, error) {
 				best_node = n
 			} else {
 				cur_value := atomic.LoadUint32(&n.fails)
-				if best_value < cur_value {
+				if best_value > cur_value {
 					best_value = cur_value
 					best_node = n
 				}
