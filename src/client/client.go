@@ -11,6 +11,18 @@ import (
 	"time"
 )
 
+var (
+	ErrorNoNodes        = errors.New("No working nodes.")
+	ErrorTimeout        = errors.New("Timeout exceeded.")
+	ErrorBusy           = errors.New("Servers busy.")
+	ErrorTooMuchRetries = errors.New("Too much retries.")
+)
+
+var (
+	errWrongResponce = errors.New("Wrong responce.")
+	errLockIsNil     = errors.New("Try to unlock nil lock.")
+)
+
 type responce struct {
 	id          commandId         // уникальный номер команды
 	nodes       map[uint64]string // список нод при OPTIONS
@@ -192,7 +204,7 @@ func (client *Client) node() (*node, error) {
 		return client.nodes.current, nil
 	}
 
-	return nil, errors.New("No working nodes.")
+	return nil, ErrorNoNodes
 }
 
 func (client *Client) node_by_id(node_id uint64) *node {
@@ -281,7 +293,7 @@ func (lock *Lock) Key() string {
 // за время timeout снять ранее установленную блокировку
 func (client *Client) Unlock(lock *Lock) error {
 	if lock == nil {
-		return errors.New("Try to release nil lock.")
+		return errLockIsNil
 	}
 
 	defer release_lock(lock)
@@ -348,18 +360,18 @@ func read(conn *net.UDPConn) (*responce, error) {
 func (responce *responce) unmarshal(buf []byte) error {
 
 	if len(buf) > 508 || len(buf) < 32 {
-		return errorln("wrong data size", len(buf))
+		return errWrongResponce //errorln("wrong data size", len(buf))
 	}
 
 	version := buf[0] // 0 байт - версия
 	if version != 1 {
-		return errorln("unsupported protocol version", version)
+		return errWrongResponce //errorln("unsupported protocol version", version)
 	}
 
 	buf_size := int(binary.LittleEndian.Uint16(buf[1:])) // 1 и 2 байты - размер пакета
 
 	if buf_size != len(buf) {
-		return errorln("wrong packet size", buf_size, len(buf), code2string(buf[3]))
+		return errWrongResponce //errorln("wrong packet size", buf_size, len(buf), code2string(buf[3]))
 	}
 
 	responce.code = buf[3] //  3 байт - команда: CONNECT, OPTIONS, LOCK , UNLOCK и т.д.
@@ -368,14 +380,14 @@ func (responce *responce) unmarshal(buf []byte) error {
 	checksum := binary.LittleEndian.Uint32(buf[4:])
 
 	if checksum != 0 {
-		return errorln("wrong packet checsum", checksum, "in", fmt.Sprint(responce.code))
+		return errWrongResponce //errorln("wrong packet checsum", checksum, "in", fmt.Sprint(responce.code))
 	}
 
 	switch responce.code {
 
 	case OPTIONS:
 		if buf_size != 508 {
-			return errorln("wrong packet size", buf_size, "in OPTIONS")
+			return errWrongResponce //errorln("wrong packet size", buf_size, "in OPTIONS")
 		}
 		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
 		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
@@ -384,7 +396,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 		nodes_pos := 32
 		nodes_num := int(buf[nodes_pos])
 		if nodes_num < 1 || nodes_num > 7 { // максимум 7 нод. ??? надо ли больше?
-			return errorln("wrong number of nodes", nodes_num, "in OPTIONS")
+			return errWrongResponce //errorln("wrong number of nodes", nodes_num, "in OPTIONS")
 		}
 
 		nodes_pos++
@@ -392,7 +404,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 			//проверяем, что nodes_pos не выходит за границы buf
 			if (nodes_pos + 8 + 1) >= buf_size {
-				return errorln("wrong nodes position", nodes_pos, "in OPTIONS")
+				return errWrongResponce //errorln("wrong nodes position", nodes_pos, "in OPTIONS")
 			}
 			node_id := binary.LittleEndian.Uint64(buf[nodes_pos:])
 			nodes_pos += 8
@@ -402,7 +414,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 			//проверяем, что nodes_pos не выходит за границы buf
 			if (nodes_pos + node_string_size) > buf_size {
-				return errorln("wrong nodes string size: from", nodes_pos, "to", (nodes_pos + node_string_size), "in OPTIONS")
+				return errWrongResponce //errorln("wrong nodes string size: from", nodes_pos, "to", (nodes_pos + node_string_size), "in OPTIONS")
 			}
 
 			node_string := string(buf[nodes_pos : nodes_pos+node_string_size])
@@ -413,7 +425,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 	case OK, TIMEOUT, BUSY:
 		if buf_size != 32 {
-			return errorln("wrong packet size", buf_size, "in", code2string(responce.code))
+			return errWrongResponce //errorln("wrong packet size", buf_size, "in", code2string(responce.code))
 		}
 		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
 		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
@@ -421,7 +433,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 	case REDIRECT:
 		if buf_size != 40 {
-			return errorln("wrong packet size", buf_size, "in REDIRECT")
+			return errWrongResponce //errorln("wrong packet size", buf_size, "in REDIRECT")
 		}
 		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
 		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
@@ -430,7 +442,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 	case ERROR:
 		if buf_size < 33 {
-			return errorln("wrong packet size", buf_size, "in ERROR")
+			return errWrongResponce //errorln("wrong packet size", buf_size, "in ERROR")
 		}
 		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
 		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
@@ -438,21 +450,21 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 		desc_string_size := int(buf[32]) // 32 байт - размер адреса ноды
 		if desc_string_size+33 != buf_size {
-			return errorln("wrong description size", desc_string_size, buf_size, "in ERROR")
+			return errWrongResponce //errorln("wrong description size", desc_string_size, buf_size, "in ERROR")
 		}
 
 		responce.description = string(buf[33 : 33+desc_string_size])
 
 	case PONG:
 		if buf_size != 508 {
-			return errorln("wrong packet size", buf_size, "in PONG")
+			return errWrongResponce //errorln("wrong packet size", buf_size, "in PONG")
 		}
 		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
 		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
 		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
 
 	default:
-		return errorln("wrong command code:", fmt.Sprint(responce.code))
+		return errWrongResponce //errorln("wrong command code:", fmt.Sprint(responce.code))
 	}
 
 	return nil
@@ -586,12 +598,6 @@ func release_responce(c *responce) {
 
 var responce_pool sync.Pool
 
-var (
-	ErrorTimeout   = errors.New("Timeout exceeded.")
-	ErrorBusy      = errors.New("Servers busy.")
-	ErrorWrongCode = errors.New("Wrong responce code.")
-)
-
 func (command *command) is_enough_retries() bool {
 	//return atomic.AddInt32(&command.retries, 1) >= command.client.retries
 	command.retries++
@@ -670,7 +676,7 @@ func (command *command) send(node *node) {
 		if command.is_enough_retries() {
 
 			command.client.working_commands.delete(command.id)
-			command.resp_chan <- errorln("Too much retries. Last error:", err)
+			command.resp_chan <- ErrorTooMuchRetries
 			return
 		}
 		node = nil // чтобы выбрать другую ноду
@@ -683,7 +689,7 @@ func (command *command) on_timeout() bool {
 
 	if command.is_enough_retries() {
 		command.client.working_commands.delete(command.id)
-		command.resp_chan <- errors.New("Too much retries. Last error: last request timeouted.")
+		command.resp_chan <- ErrorTooMuchRetries
 	} else {
 		command.send_chan <- nil
 		return false
@@ -704,7 +710,7 @@ func (command *command) process(resp *responce) bool {
 		command.current_node.ok()
 		if command.is_enough_retries() {
 			command.client.working_commands.delete(command.id)
-			command.resp_chan <- errors.New("Too much retries.")
+			command.resp_chan <- ErrorTooMuchRetries
 		} else {
 			command.send_chan <- command.client.node_by_id(resp.node_id)
 			return false
@@ -713,14 +719,14 @@ func (command *command) process(resp *responce) bool {
 	case TIMEOUT:
 		command.current_node.ok()
 		command.client.working_commands.delete(command.id)
-		command.resp_chan <- errors.New("Timeout exceeded.")
+		command.resp_chan <- ErrorTimeout
 
 	case BUSY:
 		command.current_node.fail()
 
 		if command.is_enough_retries() {
 			command.client.working_commands.delete(command.id)
-			command.resp_chan <- errors.New("Too much retries. Last error: Server busy. Load too high.")
+			command.resp_chan <- ErrorBusy
 		} else { // пробуем другую ноду
 			command.send_chan <- nil
 			return false
@@ -732,7 +738,7 @@ func (command *command) process(resp *responce) bool {
 		command.resp_chan <- errors.New(resp.description)
 
 	default:
-		command.resp_chan <- errors.New("Wrong command type.")
+		command.resp_chan <- errWrongResponce
 	}
 
 	release_responce(resp)
@@ -949,7 +955,7 @@ func Open(addrs []string, options *Options) (*Client, error) {
 		return client, nil
 	}
 
-	return nil, errors.New("No nodes to connect")
+	return nil, ErrorNoNodes
 }
 
 func (client *Client) connect_options(addr string) (*responce, error) {
