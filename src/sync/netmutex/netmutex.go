@@ -1,4 +1,4 @@
-package client
+package netmutex
 
 import (
 	"encoding/binary"
@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	ErrorNoNodes        = errors.New("No working nodes.")
-	ErrorTimeout        = errors.New("Timeout exceeded.")
-	ErrorBusy           = errors.New("Servers busy.")
-	ErrorTooMuchRetries = errors.New("Too much retries.")
+	ErrNoNodes        = errors.New("No working nodes.")
+	ErrTimeout        = errors.New("Timeout exceeded.")
+	ErrBusy           = errors.New("Servers busy.")
+	ErrTooMuchRetries = errors.New("Too much retries.")
 )
 
 var (
@@ -40,7 +40,7 @@ type command struct {
 	send_chan    chan *node     // канал, в который пишется нода, на которую надо послать запрос
 	process_chan chan *responce // канал, в который пишется ответ от ноды, который надо обработать
 	retries      int32          // количество запросов к нодам, прежде чем вернуть ошибку
-	client       *Client        // ссылка на клиента для чтения списка нод и retries
+	netmutex       *NetMutex        // ссылка на клиента для чтения списка нод и retries
 	current_node *node          // нода, которая обработывает текущего запрос
 	timer        *time.Timer    // таймер текущего запроса
 	code         byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
@@ -149,7 +149,7 @@ type Options struct {
 	WriteBufferSize int
 }
 
-type Client struct {
+type NetMutex struct {
 	next_command_id   commandId     // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	ttl               time.Duration // значение по умолчанию для Lock(), Unlock()
 	timeout           time.Duration // значение по умолчанию для Timeout
@@ -162,29 +162,29 @@ type Client struct {
 	working_commands  *working_commands
 }
 
-func (client *Client) command_id() commandId {
+func (netmutex *NetMutex) command_id() commandId {
 	return commandId{
-		node_id:       client.next_command_id.node_id,
-		connection_id: client.next_command_id.connection_id,
-		request_id:    atomic.AddUint64(&client.next_command_id.request_id, 1),
+		node_id:       netmutex.next_command_id.node_id,
+		connection_id: netmutex.next_command_id.connection_id,
+		request_id:    atomic.AddUint64(&netmutex.next_command_id.request_id, 1),
 	}
 }
 
-func (client *Client) node() (*node, error) {
-	client.nodes.Lock()
-	defer client.nodes.Unlock()
+func (netmutex *NetMutex) node() (*node, error) {
+	netmutex.nodes.Lock()
+	defer netmutex.nodes.Unlock()
 
-	if client.nodes.current != nil {
-		if atomic.LoadUint32(&client.nodes.current.fails) == 0 { // ToDo переписать. при множестве потерь пакетов это условие редко срабатывает и каждый раз делается перебор нод
-			return client.nodes.current, nil
+	if netmutex.nodes.current != nil {
+		if atomic.LoadUint32(&netmutex.nodes.current.fails) == 0 { // ToDo переписать. при множестве потерь пакетов это условие редко срабатывает и каждый раз делается перебор нод
+			return netmutex.nodes.current, nil
 		}
 	}
 
 	var best_value uint32
 	var best_node *node
-	for _, n := range client.nodes.m {
+	for _, n := range netmutex.nodes.m {
 		// пропускаем несоединившиеся ноды и текущую ноду
-		if n.conn != nil && client.nodes.current != n {
+		if n.conn != nil && netmutex.nodes.current != n {
 
 			if best_node == nil {
 				best_value = atomic.LoadUint32(&n.fails)
@@ -200,18 +200,18 @@ func (client *Client) node() (*node, error) {
 	}
 
 	if best_node != nil {
-		client.nodes.current = best_node
-		return client.nodes.current, nil
+		netmutex.nodes.current = best_node
+		return netmutex.nodes.current, nil
 	}
 
-	return nil, ErrorNoNodes
+	return nil, ErrNoNodes
 }
 
-func (client *Client) node_by_id(node_id uint64) *node {
-	client.nodes.Lock()
-	defer client.nodes.Unlock()
+func (netmutex *NetMutex) node_by_id(node_id uint64) *node {
+	netmutex.nodes.Lock()
+	defer netmutex.nodes.Unlock()
 
-	if node, ok := client.nodes.m[node_id]; ok {
+	if node, ok := netmutex.nodes.m[node_id]; ok {
 		return node
 	}
 
@@ -219,38 +219,38 @@ func (client *Client) node_by_id(node_id uint64) *node {
 }
 
 // заблокировать, если не было заблокировано ранее
-func (client *Client) LockIfUnlocked(key string) (*Lock, error) {
+func (netmutex *NetMutex) LockIfUnlocked(key string) (*Lock, error) {
 	return nil, errors.New("LockIfUnlocked() has not yet implemented.")
 }
 
 // заблокировать все или ниодного.
-func (client *Client) LockEach(keys []string) ([]*Lock, error) {
+func (netmutex *NetMutex) LockEach(keys []string) ([]*Lock, error) {
 	return nil, errors.New("LockEach() has not yet implemented.")
 }
 
 // заблокировать всё, что получится.
-func (client *Client) LockAny(keys []string) ([]*Lock, error) {
+func (netmutex *NetMutex) LockAny(keys []string) ([]*Lock, error) {
 	return nil, errors.New("LockAny() has not yet implemented.")
 }
 
 // заблокировать на чтение
-func (client *Client) RLock(key string) (*Lock, error) {
-	return client.Lock(key) // ToDo переделать
+func (netmutex *NetMutex) RLock(key string) (*Lock, error) {
+	return netmutex.Lock(key) // ToDo переделать
 }
 
 // снять все блокировки
-func (client *Client) UnlockAll() error {
+func (netmutex *NetMutex) UnlockAll() error {
 	return errors.New("UnlockAll() has not yet implemented.")
 }
 
 // за время timeout установить блокировку ключа key на время ttl
 // Lock(key string)
-func (client *Client) Lock(key string) (*Lock, error) {
-	timeout := client.timeout
-	ttl := client.ttl
-	command_id := client.command_id()
+func (netmutex *NetMutex) Lock(key string) (*Lock, error) {
+	timeout := netmutex.timeout
+	ttl := netmutex.ttl
+	command_id := netmutex.command_id()
 
-	err := client.run_command(key, command_id, ttl, LOCK, timeout)
+	err := netmutex.run_command(key, command_id, ttl, LOCK, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (client *Client) Lock(key string) (*Lock, error) {
 	lock := acquire_lock()
 
 	lock.key = key
-	lock.client = client
+	lock.netmutex = netmutex
 	lock.command_id = command_id
 	lock.timeout = timeout
 
@@ -282,7 +282,7 @@ var lock_pool sync.Pool
 
 type Lock struct {
 	key        string
-	client     *Client
+	netmutex     *NetMutex
 	command_id commandId
 	timeout    time.Duration
 }
@@ -293,14 +293,14 @@ func (lock *Lock) Key() string {
 }
 
 // за время timeout снять ранее установленную блокировку
-func (client *Client) Unlock(lock *Lock) error {
+func (netmutex *NetMutex) Unlock(lock *Lock) error {
 	if lock == nil {
 		return errLockIsNil
 	}
 
 	defer release_lock(lock)
 
-	return lock.client.run_command(lock.key, lock.command_id, 0, UNLOCK, lock.timeout)
+	return lock.netmutex.run_command(lock.key, lock.command_id, 0, UNLOCK, lock.timeout)
 }
 
 func write_with_timeout(conn *net.UDPConn, command *command, timeout time.Duration) error {
@@ -601,12 +601,12 @@ func release_responce(c *responce) {
 var responce_pool sync.Pool
 
 func (command *command) is_enough_retries() bool {
-	//return atomic.AddInt32(&command.retries, 1) >= command.client.retries
+	//return atomic.AddInt32(&command.retries, 1) >= command.netmutex.retries
 	command.retries++
-	return command.retries >= command.client.retries
+	return command.retries >= command.netmutex.retries
 }
 
-func (client *Client) run_command(key string, command_id commandId, ttl time.Duration, command_code byte, timeout time.Duration) error {
+func (netmutex *NetMutex) run_command(key string, command_id commandId, ttl time.Duration, command_code byte, timeout time.Duration) error {
 
 	command := acquire_command()
 	defer release_command(command)
@@ -616,9 +616,9 @@ func (client *Client) run_command(key string, command_id commandId, ttl time.Dur
 	command.key = key
 	command.ttl = ttl
 	command.timeout = timeout
-	command.client = client
+	command.netmutex = netmutex
 
-	client.working_commands.add(command)
+	netmutex.working_commands.add(command)
 
 	go command.run()
 	command.send_chan <- nil
@@ -629,7 +629,7 @@ func (client *Client) run_command(key string, command_id commandId, ttl time.Dur
 func (command *command) run() {
 	for {
 		select {
-		case <-command.client.done:
+		case <-command.netmutex.done:
 			return
 
 		case node := <-command.send_chan:
@@ -654,10 +654,10 @@ func (command *command) send(node *node) {
 
 	for {
 		if node == nil {
-			node, err = command.client.node()
+			node, err = command.netmutex.node()
 			if err != nil { // некуда отправлять команду, поэтому сразу возвращаем ошибку
 
-				command.client.working_commands.delete(command.id)
+				command.netmutex.working_commands.delete(command.id)
 				command.resp_chan <- err
 				return
 			}
@@ -677,8 +677,8 @@ func (command *command) send(node *node) {
 
 		if command.is_enough_retries() {
 
-			command.client.working_commands.delete(command.id)
-			command.resp_chan <- ErrorTooMuchRetries
+			command.netmutex.working_commands.delete(command.id)
+			command.resp_chan <- ErrTooMuchRetries
 			return
 		}
 		node = nil // чтобы выбрать другую ноду
@@ -690,8 +690,8 @@ func (command *command) on_timeout() bool {
 	command.current_node.fail()
 
 	if command.is_enough_retries() {
-		command.client.working_commands.delete(command.id)
-		command.resp_chan <- ErrorTooMuchRetries
+		command.netmutex.working_commands.delete(command.id)
+		command.resp_chan <- ErrTooMuchRetries
 	} else {
 		command.send_chan <- nil
 		return false
@@ -705,30 +705,30 @@ func (command *command) process(resp *responce) bool {
 	switch resp.code {
 	case OK:
 		command.current_node.ok()
-		command.client.working_commands.delete(command.id)
+		command.netmutex.working_commands.delete(command.id)
 		command.resp_chan <- nil
 
 	case REDIRECT:
 		command.current_node.ok()
 		if command.is_enough_retries() {
-			command.client.working_commands.delete(command.id)
-			command.resp_chan <- ErrorTooMuchRetries
+			command.netmutex.working_commands.delete(command.id)
+			command.resp_chan <- ErrTooMuchRetries
 		} else {
-			command.send_chan <- command.client.node_by_id(resp.node_id)
+			command.send_chan <- command.netmutex.node_by_id(resp.node_id)
 			return false
 		}
 
 	case TIMEOUT:
 		command.current_node.ok()
-		command.client.working_commands.delete(command.id)
-		command.resp_chan <- ErrorTimeout
+		command.netmutex.working_commands.delete(command.id)
+		command.resp_chan <- ErrTimeout
 
 	case BUSY:
 		command.current_node.fail()
 
 		if command.is_enough_retries() {
-			command.client.working_commands.delete(command.id)
-			command.resp_chan <- ErrorBusy
+			command.netmutex.working_commands.delete(command.id)
+			command.resp_chan <- ErrBusy
 		} else { // пробуем другую ноду
 			command.send_chan <- nil
 			return false
@@ -736,7 +736,7 @@ func (command *command) process(resp *responce) bool {
 
 	case ERROR:
 		command.current_node.ok()
-		command.client.working_commands.delete(command.id)
+		command.netmutex.working_commands.delete(command.id)
 		command.resp_chan <- errors.New(resp.description)
 
 	default:
@@ -749,12 +749,12 @@ func (command *command) process(resp *responce) bool {
 }
 
 //  горутины (по числу нод) читают ответы из своих соединений и направляют их в канал ответов
-func (client *Client) read_responces(node *node) {
+func (netmutex *NetMutex) read_responces(node *node) {
 	conn := node.conn
 	for {
 		// выходим из цикла, если клиент закончил свою работу
 		select {
-		case <-client.done:
+		case <-netmutex.done:
 			conn.Close()
 			return
 		default:
@@ -779,23 +779,23 @@ func (client *Client) read_responces(node *node) {
 			time.Sleep(100 * time.Millisecond)
 
 		} else {
-			client.responces <- resp
+			netmutex.responces <- resp
 		}
 	}
 }
 
 // пытается открыть соединение
-func (client *Client) repair_conn(node *node) {
+func (netmutex *NetMutex) repair_conn(node *node) {
 	for {
 		select {
-		case <-client.done:
+		case <-netmutex.done:
 			// выходим из цикла, если клиент закончил свою работу
 			return
 
 		default:
 		}
 
-		conn, err := open_conn(node.addr, client.read_buffer_size, client.write_buffer_size)
+		conn, err := open_conn(node.addr, netmutex.read_buffer_size, netmutex.write_buffer_size)
 
 		if err != nil {
 			node.fail()
@@ -804,18 +804,18 @@ func (client *Client) repair_conn(node *node) {
 		}
 		node.conn = conn
 
-		go client.read_responces(node)
+		go netmutex.read_responces(node)
 		return
 	}
 }
 
 // горутина читает канал ответов
-func (client *Client) run() {
+func (netmutex *NetMutex) run() {
 	for {
 		select {
-		case <-client.done:
+		case <-netmutex.done:
 			return
-		case resp := <-client.responces:
+		case resp := <-netmutex.responces:
 			if resp.code == OPTIONS {
 				// переконфигурация: новый список нод, новый уникальный command_id
 				// ToDo написать переконфигурацию
@@ -823,7 +823,7 @@ func (client *Client) run() {
 				continue
 			}
 
-			command, ok := client.working_commands.get(resp.id)
+			command, ok := netmutex.working_commands.get(resp.id)
 			// если команда не нашлась по Id, то ждём следующую
 			if !ok {
 				release_responce(resp)
@@ -871,9 +871,9 @@ const (
 // соединяется к первой ответившей ноде из списка,
 // получает с неё актуальный список нод,
 // задаёт параметры соединений, дефолтные ttl и timeout для будущих запросов
-func Open(addrs []string, options *Options) (*Client, error) {
+func Open(addrs []string, options *Options) (*NetMutex, error) {
 
-	client := &Client{
+	netmutex := &NetMutex{
 		ttl:               DefaultTTL,
 		timeout:           DefaultTimeout,
 		retries:           DefaultRetries,
@@ -888,31 +888,31 @@ func Open(addrs []string, options *Options) (*Client, error) {
 
 	if options != nil {
 		if options.TTL > 0 {
-			client.ttl = options.TTL
+			netmutex.ttl = options.TTL
 		}
 		if options.Timeout > 0 {
-			client.timeout = options.Timeout
+			netmutex.timeout = options.Timeout
 		}
 		if options.Retries > 0 {
-			client.retries = options.Retries
+			netmutex.retries = options.Retries
 		}
 		if options.ReadBufferSize > 0 {
-			client.read_buffer_size = options.ReadBufferSize
+			netmutex.read_buffer_size = options.ReadBufferSize
 		}
 		if options.WriteBufferSize > 0 {
-			client.write_buffer_size = options.WriteBufferSize
+			netmutex.write_buffer_size = options.WriteBufferSize
 		}
 	}
 
 	// обходим все сервера из списка
 	for _, addr := range addrs {
 
-		options, err := client.connect_options(addr)
+		options, err := netmutex.connect_options(addr)
 		if err != nil {
 			continue
 		}
 
-		client.next_command_id = options.id
+		netmutex.next_command_id = options.id
 
 		remote_nodes := make(map[uint64]*node)
 
@@ -928,39 +928,39 @@ func Open(addrs []string, options *Options) (*Client, error) {
 				rtt:  1,   // ToDo брать из пинг-понга
 			}
 
-			conn, err := open_conn(remote_nodes[node_id].addr, client.read_buffer_size, client.write_buffer_size)
+			conn, err := open_conn(remote_nodes[node_id].addr, netmutex.read_buffer_size, netmutex.write_buffer_size)
 			if err != nil {
 				remote_nodes[node_id].fail()
 				continue
 			}
 			remote_nodes[node_id].conn = conn
 
-			err = client.ping_pong(remote_nodes[node_id])
+			err = netmutex.ping_pong(remote_nodes[node_id])
 			if err != nil {
 				remote_nodes[node_id].fail()
 			}
 		}
 
-		client.nodes = &nodes{
+		netmutex.nodes = &nodes{
 			m: remote_nodes,
 		}
 
-		for _, node := range client.nodes.m {
+		for _, node := range netmutex.nodes.m {
 			if node.conn != nil {
-				go client.read_responces(node)
+				go netmutex.read_responces(node)
 			} else {
-				go client.repair_conn(node)
+				go netmutex.repair_conn(node)
 			}
 		}
-		go client.run()
+		go netmutex.run()
 
-		return client, nil
+		return netmutex, nil
 	}
 
-	return nil, ErrorNoNodes
+	return nil, ErrNoNodes
 }
 
-func (client *Client) connect_options(addr string) (*responce, error) {
+func (netmutex *NetMutex) connect_options(addr string) (*responce, error) {
 	conn, err := open_conn(addr, 0, 0)
 	if err != nil {
 		return nil, err
@@ -985,10 +985,10 @@ func (client *Client) connect_options(addr string) (*responce, error) {
 	return resp, nil
 }
 
-func (client *Client) ping_pong(node *node) error {
+func (netmutex *NetMutex) ping_pong(node *node) error {
 	ping_command := &command{
 		code: PING,
-		id:   client.command_id(),
+		id:   netmutex.command_id(),
 	}
 
 	err := write_with_timeout(node.conn, ping_command, time.Second)
@@ -1034,6 +1034,6 @@ func open_conn(addr string, read_buffer_size int, write_buffer_size int) (*net.U
 	return conn, nil
 }
 
-func (client *Client) Close() {
-	close(client.done)
+func (netmutex *NetMutex) Close() {
+	close(netmutex.done)
 }

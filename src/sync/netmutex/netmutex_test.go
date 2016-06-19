@@ -1,4 +1,4 @@
-package client
+package netmutex
 
 import (
 	"log"
@@ -74,8 +74,8 @@ func BenchmarkLockUnlock(b *testing.B) {
 	}
 }
 
-// go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." client -x
-// go tool pprof client.test.exe mem.out
+// go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
+// go tool pprof netmutex.test.exe mem.out
 
-// go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." client -x
-// go tool pprof client.test.exe cpu.out
+// go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." netmutex -x
+// go tool pprof netmutex.test.exe cpu.out

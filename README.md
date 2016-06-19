@@ -1,8 +1,8 @@
-#Go client to lock server
+#sync/netmutex - Go client to lock server
 
 Golang client library for reliable distributed lock-servers. Zero memory allocation. Goroutine-safe.
 
-##Usage
+##Test sync/netmutex perfomance
 
 Start mock-servers:
 
