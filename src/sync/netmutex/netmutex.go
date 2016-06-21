@@ -19,11 +19,11 @@ var (
 )
 
 var (
-	errWrongResponce = errors.New("Wrong responce.")
+	errWrongResponse = errors.New("Wrong response.")
 	errLockIsNil     = errors.New("Try to unlock nil lock.")
 )
 
-type responce struct {
+type response struct {
 	id          commandId         // уникальный номер команды
 	nodes       map[uint64]string // список нод при OPTIONS
 	node_id     uint64            // адрес ноды при REDIRECT
@@ -38,9 +38,9 @@ type command struct {
 	timeout      time.Duration  // за какое время надо попытаться выполнить команду
 	resp_chan    chan error     // канал, в который пишется ответ от ноды
 	send_chan    chan *node     // канал, в который пишется нода, на которую надо послать запрос
-	process_chan chan *responce // канал, в который пишется ответ от ноды, который надо обработать
+	process_chan chan *response // канал, в который пишется ответ от ноды, который надо обработать
 	retries      int32          // количество запросов к нодам, прежде чем вернуть ошибку
-	netmutex       *NetMutex        // ссылка на клиента для чтения списка нод и retries
+	netmutex     *NetMutex      // ссылка на клиента для чтения списка нод и retries
 	current_node *node          // нода, которая обработывает текущего запрос
 	timer        *time.Timer    // таймер текущего запроса
 	code         byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
@@ -157,7 +157,7 @@ type NetMutex struct {
 	read_buffer_size  int
 	write_buffer_size int
 	done              chan struct{}
-	responces         chan *responce
+	responses         chan *response
 	nodes             *nodes
 	working_commands  *working_commands
 }
@@ -282,7 +282,7 @@ var lock_pool sync.Pool
 
 type Lock struct {
 	key        string
-	netmutex     *NetMutex
+	netmutex   *NetMutex
 	command_id commandId
 	timeout    time.Duration
 }
@@ -317,7 +317,6 @@ func write(conn *net.UDPConn, command *command) error {
 	if err != nil {
 		return err
 	}
-	b.buf = b.buf[0:buf_size]
 
 	// say ("Send", len(msg), "bytes:", command, "from", conn.LocalAddr(), "to", conn.RemoteAddr(), "via", conn)
 	n, err := conn.Write(b.buf[0:buf_size])
@@ -331,13 +330,13 @@ func write(conn *net.UDPConn, command *command) error {
 	return nil
 }
 
-func read_with_timeout(conn *net.UDPConn, timeout time.Duration) (*responce, error) {
+func read_with_timeout(conn *net.UDPConn, timeout time.Duration) (*response, error) {
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	defer conn.SetReadDeadline(time.Time{}) // убираем таймаут для будущих операций
 	return read(conn)
 }
 
-func read(conn *net.UDPConn) (*responce, error) {
+func read(conn *net.UDPConn) (*response, error) {
 
 	b := acquire_byte_buffer()
 	defer release_byte_buffer(b)
@@ -348,57 +347,57 @@ func read(conn *net.UDPConn) (*responce, error) {
 		return nil, err
 	}
 
-	responce := acquire_responce()
-	err = responce.unmarshal(b.buf[:n])
+	response := acquire_response()
+	err = response.unmarshal(b.buf[:n])
 	if err != nil {
-		release_responce(responce)
+		release_response(response)
 		return nil, err
 	}
 
-	// say ("Received", n, "bytes", responce, "from", conn.RemoteAddr(), "to", conn.LocalAddr(), "via", conn)
-	return responce, nil
+	// say ("Received", n, "bytes", response, "from", conn.RemoteAddr(), "to", conn.LocalAddr(), "via", conn)
+	return response, nil
 }
 
-func (responce *responce) unmarshal(buf []byte) error {
+func (response *response) unmarshal(buf []byte) error {
 
 	if len(buf) > 508 || len(buf) < 32 {
-		return errWrongResponce //errorln("wrong data size", len(buf))
+		return errWrongResponse //errorln("wrong data size", len(buf))
 	}
 
 	version := buf[0] // 0 байт - версия
 	if version != 1 {
-		return errWrongResponce //errorln("unsupported protocol version", version)
+		return errWrongResponse //errorln("unsupported protocol version", version)
 	}
 
 	buf_size := int(binary.LittleEndian.Uint16(buf[1:])) // 1 и 2 байты - размер пакета
 
 	if buf_size != len(buf) {
-		return errWrongResponce //errorln("wrong packet size", buf_size, len(buf), code2string(buf[3]))
+		return errWrongResponse //errorln("wrong packet size", buf_size, len(buf), code2string(buf[3]))
 	}
 
-	responce.code = buf[3] //  3 байт - команда: CONNECT, OPTIONS, LOCK , UNLOCK и т.д.
+	response.code = buf[3] //  3 байт - команда: CONNECT, OPTIONS, LOCK , UNLOCK и т.д.
 
 	// 4, 5, 6 и 7 байты пока не используются. можно в будущем сюда писать приоритет и чексумму, например
 	checksum := binary.LittleEndian.Uint32(buf[4:])
 
 	if checksum != 0 {
-		return errWrongResponce //errorln("wrong packet checsum", checksum, "in", fmt.Sprint(responce.code))
+		return errWrongResponse //errorln("wrong packet checsum", checksum, "in", fmt.Sprint(response.code))
 	}
 
-	switch responce.code {
+	switch response.code {
 
 	case OPTIONS:
 		if buf_size != 508 {
-			return errWrongResponce //errorln("wrong packet size", buf_size, "in OPTIONS")
+			return errWrongResponse //errorln("wrong packet size", buf_size, "in OPTIONS")
 		}
-		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
+		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
 
 		nodes_pos := 32
 		nodes_num := int(buf[nodes_pos])
 		if nodes_num < 1 || nodes_num > 7 { // максимум 7 нод. ??? надо ли больше?
-			return errWrongResponce //errorln("wrong number of nodes", nodes_num, "in OPTIONS")
+			return errWrongResponse //errorln("wrong number of nodes", nodes_num, "in OPTIONS")
 		}
 
 		nodes_pos++
@@ -406,7 +405,7 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 			//проверяем, что nodes_pos не выходит за границы buf
 			if (nodes_pos + 8 + 1) >= buf_size {
-				return errWrongResponce //errorln("wrong nodes position", nodes_pos, "in OPTIONS")
+				return errWrongResponse //errorln("wrong nodes position", nodes_pos, "in OPTIONS")
 			}
 			node_id := binary.LittleEndian.Uint64(buf[nodes_pos:])
 			nodes_pos += 8
@@ -416,57 +415,57 @@ func (responce *responce) unmarshal(buf []byte) error {
 
 			//проверяем, что nodes_pos не выходит за границы buf
 			if (nodes_pos + node_string_size) > buf_size {
-				return errWrongResponce //errorln("wrong nodes string size: from", nodes_pos, "to", (nodes_pos + node_string_size), "in OPTIONS")
+				return errWrongResponse //errorln("wrong nodes string size: from", nodes_pos, "to", (nodes_pos + node_string_size), "in OPTIONS")
 			}
 
 			node_string := string(buf[nodes_pos : nodes_pos+node_string_size])
 			nodes_pos += node_string_size
 
-			responce.nodes[node_id] = node_string
+			response.nodes[node_id] = node_string
 		}
 
 	case OK, TIMEOUT, BUSY:
 		if buf_size != 32 {
-			return errWrongResponce //errorln("wrong packet size", buf_size, "in", code2string(responce.code))
+			return errWrongResponse //errorln("wrong packet size", buf_size, "in", code2string(response.code))
 		}
-		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
+		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
 
 	case REDIRECT:
 		if buf_size != 40 {
-			return errWrongResponce //errorln("wrong packet size", buf_size, "in REDIRECT")
+			return errWrongResponse //errorln("wrong packet size", buf_size, "in REDIRECT")
 		}
-		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
-		responce.node_id = binary.LittleEndian.Uint64(buf[32:])
+		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
+		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.node_id = binary.LittleEndian.Uint64(buf[32:])
 
 	case ERROR:
 		if buf_size < 33 {
-			return errWrongResponce //errorln("wrong packet size", buf_size, "in ERROR")
+			return errWrongResponse //errorln("wrong packet size", buf_size, "in ERROR")
 		}
-		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
+		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
 
 		desc_string_size := int(buf[32]) // 32 байт - размер адреса ноды
 		if desc_string_size+33 != buf_size {
-			return errWrongResponce //errorln("wrong description size", desc_string_size, buf_size, "in ERROR")
+			return errWrongResponse //errorln("wrong description size", desc_string_size, buf_size, "in ERROR")
 		}
 
-		responce.description = string(buf[33 : 33+desc_string_size])
+		response.description = string(buf[33 : 33+desc_string_size])
 
 	case PONG:
 		if buf_size != 508 {
-			return errWrongResponce //errorln("wrong packet size", buf_size, "in PONG")
+			return errWrongResponse //errorln("wrong packet size", buf_size, "in PONG")
 		}
-		responce.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		responce.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		responce.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
+		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
 
 	default:
-		return errWrongResponce //errorln("wrong command code:", fmt.Sprint(responce.code))
+		return errWrongResponse //errorln("wrong command code:", fmt.Sprint(response.code))
 	}
 
 	return nil
@@ -568,7 +567,7 @@ func acquire_command() *command {
 		return &command{
 			resp_chan:    make(chan error),
 			send_chan:    make(chan *node, 2),
-			process_chan: make(chan *responce),
+			process_chan: make(chan *response),
 			timer:        timer,
 			retries:      0,
 		}
@@ -584,21 +583,21 @@ func release_command(c *command) {
 
 var command_pool sync.Pool
 
-func acquire_responce() *responce {
-	c := responce_pool.Get()
+func acquire_response() *response {
+	c := response_pool.Get()
 	if c == nil {
-		return &responce{
+		return &response{
 			nodes: make(map[uint64]string),
 		}
 	}
-	return c.(*responce)
+	return c.(*response)
 }
 
-func release_responce(c *responce) {
-	responce_pool.Put(c)
+func release_response(c *response) {
+	response_pool.Put(c)
 }
 
-var responce_pool sync.Pool
+var response_pool sync.Pool
 
 func (command *command) is_enough_retries() bool {
 	//return atomic.AddInt32(&command.retries, 1) >= command.netmutex.retries
@@ -699,7 +698,7 @@ func (command *command) on_timeout() bool {
 	return true
 }
 
-func (command *command) process(resp *responce) bool {
+func (command *command) process(resp *response) bool {
 	command.timer.Stop()
 
 	switch resp.code {
@@ -740,16 +739,16 @@ func (command *command) process(resp *responce) bool {
 		command.resp_chan <- errors.New(resp.description)
 
 	default:
-		command.resp_chan <- errWrongResponce
+		command.resp_chan <- errWrongResponse
 	}
 
-	release_responce(resp)
+	release_response(resp)
 
 	return true
 }
 
 //  горутины (по числу нод) читают ответы из своих соединений и направляют их в канал ответов
-func (netmutex *NetMutex) read_responces(node *node) {
+func (netmutex *NetMutex) read_responses(node *node) {
 	conn := node.conn
 	for {
 		// выходим из цикла, если клиент закончил свою работу
@@ -779,7 +778,7 @@ func (netmutex *NetMutex) read_responces(node *node) {
 			time.Sleep(100 * time.Millisecond)
 
 		} else {
-			netmutex.responces <- resp
+			netmutex.responses <- resp
 		}
 	}
 }
@@ -804,7 +803,7 @@ func (netmutex *NetMutex) repair_conn(node *node) {
 		}
 		node.conn = conn
 
-		go netmutex.read_responces(node)
+		go netmutex.read_responses(node)
 		return
 	}
 }
@@ -815,18 +814,18 @@ func (netmutex *NetMutex) run() {
 		select {
 		case <-netmutex.done:
 			return
-		case resp := <-netmutex.responces:
+		case resp := <-netmutex.responses:
 			if resp.code == OPTIONS {
 				// переконфигурация: новый список нод, новый уникальный command_id
 				// ToDo написать переконфигурацию
-				release_responce(resp)
+				release_response(resp)
 				continue
 			}
 
 			command, ok := netmutex.working_commands.get(resp.id)
 			// если команда не нашлась по Id, то ждём следующую
 			if !ok {
-				release_responce(resp)
+				release_response(resp)
 				continue
 			}
 			command.process_chan <- resp
@@ -880,7 +879,7 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 		read_buffer_size:  DefaultReadBufferSize,
 		write_buffer_size: DefaultWriteBufferSize,
 		done:              make(chan struct{}),
-		responces:         make(chan *responce),
+		responses:         make(chan *response),
 		working_commands: &working_commands{
 			m: make(map[commandId]*command),
 		},
@@ -947,7 +946,7 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 
 		for _, node := range netmutex.nodes.m {
 			if node.conn != nil {
-				go netmutex.read_responces(node)
+				go netmutex.read_responses(node)
 			} else {
 				go netmutex.repair_conn(node)
 			}
@@ -960,7 +959,7 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 	return nil, ErrNoNodes
 }
 
-func (netmutex *NetMutex) connect_options(addr string) (*responce, error) {
+func (netmutex *NetMutex) connect_options(addr string) (*response, error) {
 	conn, err := open_conn(addr, 0, 0)
 	if err != nil {
 		return nil, err

@@ -20,7 +20,7 @@ func (c command) String() string {
 	}
 }
 
-func (r responce) String() string {
+func (r response) String() string {
 	switch r.code {
 	case OK:
 		return fmt.Sprintf("OK %v", r.id)
