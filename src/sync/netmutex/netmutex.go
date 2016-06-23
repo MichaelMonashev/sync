@@ -16,6 +16,7 @@ var (
 	ErrTimeout        = errors.New("Timeout exceeded.")
 	ErrBusy           = errors.New("Servers busy.")
 	ErrTooMuchRetries = errors.New("Too much retries.")
+	ErrLongKey        = errors.New("Key too long.")
 )
 
 var (
@@ -246,6 +247,11 @@ func (netmutex *NetMutex) UnlockAll() error {
 // за время timeout установить блокировку ключа key на время ttl
 // Lock(key string)
 func (netmutex *NetMutex) Lock(key string) (*Lock, error) {
+
+	if len(key) > 255 {
+		return nil, ErrLongKey
+	}
+
 	timeout := netmutex.timeout
 	ttl := netmutex.ttl
 	command_id := netmutex.command_id()
@@ -523,7 +529,7 @@ func (command *command) marshal(buf []byte) (int, error) {
 		command_key := command.key
 		command_key_len := len(command_key)
 		if command_key_len > 255 {
-			return 0, errorln("key too long", command_key_len)
+			return 0, ErrLongKey
 		}
 
 		buf[48] = byte(command_key_len)
@@ -672,14 +678,18 @@ func (command *command) send(node *node) {
 		}
 
 		command.timer.Stop()
-		command.current_node.fail()
+
+		// если ошибка в том, что длина ключа слишком велика, то помечать ноду плохой не нужно
+		if err != ErrLongKey {
+			command.current_node.fail()
+		}
 
 		if command.is_enough_retries() {
-
 			command.netmutex.working_commands.delete(command.id)
 			command.resp_chan <- ErrTooMuchRetries
 			return
 		}
+
 		node = nil // чтобы выбрать другую ноду
 	}
 }
