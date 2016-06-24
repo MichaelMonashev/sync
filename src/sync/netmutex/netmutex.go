@@ -25,26 +25,26 @@ var (
 )
 
 type response struct {
-	id          commandId         // уникальный номер команды
+	id          commandID         // уникальный номер команды
 	nodes       map[uint64]string // список нод при OPTIONS
-	node_id     uint64            // адрес ноды при REDIRECT
+	nodeID      uint64            // адрес ноды при REDIRECT
 	description string            // описание ошибки при ERROR
 	code        byte              // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
 
 type command struct {
-	id           commandId      // уникальный номер команды
-	key          string         // ключ
-	ttl          time.Duration  // на сколько лочим ключ
-	timeout      time.Duration  // за какое время надо попытаться выполнить команду
-	resp_chan    chan error     // канал, в который пишется ответ от ноды
-	send_chan    chan *node     // канал, в который пишется нода, на которую надо послать запрос
-	process_chan chan *response // канал, в который пишется ответ от ноды, который надо обработать
-	retries      int32          // количество запросов к нодам, прежде чем вернуть ошибку
-	netmutex     *NetMutex      // ссылка на клиента для чтения списка нод и retries
-	current_node *node          // нода, которая обработывает текущего запрос
-	timer        *time.Timer    // таймер текущего запроса
-	code         byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
+	id          commandID      // уникальный номер команды
+	key         string         // ключ
+	ttl         time.Duration  // на сколько лочим ключ
+	timeout     time.Duration  // за какое время надо попытаться выполнить команду
+	respChan    chan error     // канал, в который пишется ответ от ноды
+	sendChan    chan *node     // канал, в который пишется нода, на которую надо послать запрос
+	processChan chan *response // канал, в который пишется ответ от ноды, который надо обработать
+	retries     int32          // количество запросов к нодам, прежде чем вернуть ошибку
+	netmutex    *NetMutex      // ссылка на клиента для чтения списка нод и retries
+	currentNode *node          // нода, которая обработывает текущего запрос
+	timer       *time.Timer    // таймер текущего запроса
+	code        byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
 
 // коды команд
@@ -98,10 +98,10 @@ func code2string(code byte) string {
 	}
 }
 
-type commandId struct {
-	node_id       uint64
-	connection_id uint64
-	request_id    uint64
+type commandID struct {
+	nodeID       uint64
+	connectionID uint64
+	requestID    uint64
 }
 
 type node struct {
@@ -151,23 +151,23 @@ type Options struct {
 }
 
 type NetMutex struct {
-	next_command_id   commandId     // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
-	ttl               time.Duration // значение по умолчанию для Lock(), Unlock()
-	timeout           time.Duration // значение по умолчанию для Timeout
-	retries           int32
-	read_buffer_size  int
-	write_buffer_size int
-	done              chan struct{}
-	responses         chan *response
-	nodes             *nodes
-	working_commands  *working_commands
+	nextCommandID   commandID     // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
+	ttl             time.Duration // значение по умолчанию для Lock(), Unlock()
+	timeout         time.Duration // значение по умолчанию для Timeout
+	retries         int32
+	readBufferSize  int
+	writeBufferSize int
+	done            chan struct{}
+	responses       chan *response
+	nodes           *nodes
+	workingCommands *workingCommands
 }
 
-func (netmutex *NetMutex) command_id() commandId {
-	return commandId{
-		node_id:       netmutex.next_command_id.node_id,
-		connection_id: netmutex.next_command_id.connection_id,
-		request_id:    atomic.AddUint64(&netmutex.next_command_id.request_id, 1),
+func (netmutex *NetMutex) commandID() commandID {
+	return commandID{
+		nodeID:       netmutex.nextCommandID.nodeID,
+		connectionID: netmutex.nextCommandID.connectionID,
+		requestID:    atomic.AddUint64(&netmutex.nextCommandID.requestID, 1),
 	}
 }
 
@@ -181,38 +181,38 @@ func (netmutex *NetMutex) node() (*node, error) {
 		}
 	}
 
-	var best_value uint32
-	var best_node *node
+	var bestValue uint32
+	var bestNode *node
 	for _, n := range netmutex.nodes.m {
 		// пропускаем несоединившиеся ноды и текущую ноду
 		if n.conn != nil && netmutex.nodes.current != n {
 
-			if best_node == nil {
-				best_value = atomic.LoadUint32(&n.fails)
-				best_node = n
+			if bestNode == nil {
+				bestValue = atomic.LoadUint32(&n.fails)
+				bestNode = n
 			} else {
-				cur_value := atomic.LoadUint32(&n.fails)
-				if best_value > cur_value {
-					best_value = cur_value
-					best_node = n
+				curValue := atomic.LoadUint32(&n.fails)
+				if bestValue > curValue {
+					bestValue = curValue
+					bestNode = n
 				}
 			}
 		}
 	}
 
-	if best_node != nil {
-		netmutex.nodes.current = best_node
+	if bestNode != nil {
+		netmutex.nodes.current = bestNode
 		return netmutex.nodes.current, nil
 	}
 
 	return nil, ErrNoNodes
 }
 
-func (netmutex *NetMutex) node_by_id(node_id uint64) *node {
+func (netmutex *NetMutex) nodeByID(nodeID uint64) *node {
 	netmutex.nodes.Lock()
 	defer netmutex.nodes.Unlock()
 
-	if node, ok := netmutex.nodes.m[node_id]; ok {
+	if node, ok := netmutex.nodes.m[nodeID]; ok {
 		return node
 	}
 
@@ -254,43 +254,43 @@ func (netmutex *NetMutex) Lock(key string) (*Lock, error) {
 
 	timeout := netmutex.timeout
 	ttl := netmutex.ttl
-	command_id := netmutex.command_id()
+	commandID := netmutex.commandID()
 
-	err := netmutex.run_command(key, command_id, ttl, LOCK, timeout)
+	err := netmutex.runCommand(key, commandID, ttl, LOCK, timeout)
 	if err != nil {
 		return nil, err
 	}
 
-	lock := acquire_lock()
+	lock := acquireLock()
 
 	lock.key = key
 	lock.netmutex = netmutex
-	lock.command_id = command_id
+	lock.commandID = commandID
 	lock.timeout = timeout
 
 	return lock, nil
 
 }
 
-func acquire_lock() *Lock {
-	l := lock_pool.Get()
+func acquireLock() *Lock {
+	l := lockPool.Get()
 	if l == nil {
 		return &Lock{}
 	}
 	return l.(*Lock)
 }
 
-func release_lock(l *Lock) {
-	lock_pool.Put(l)
+func releaseLock(l *Lock) {
+	lockPool.Put(l)
 }
 
-var lock_pool sync.Pool
+var lockPool sync.Pool
 
 type Lock struct {
-	key        string
-	netmutex   *NetMutex
-	command_id commandId
-	timeout    time.Duration
+	key       string
+	netmutex  *NetMutex
+	commandID commandID
+	timeout   time.Duration
 }
 
 // Возвращает ключ, по которому произошла блокировка. Удоббен в LochEach() и LocjAny()
@@ -304,39 +304,39 @@ func (netmutex *NetMutex) Unlock(lock *Lock) error {
 		return errLockIsNil
 	}
 
-	defer release_lock(lock)
+	defer releaseLock(lock)
 
-	return lock.netmutex.run_command(lock.key, lock.command_id, 0, UNLOCK, lock.timeout)
+	return lock.netmutex.runCommand(lock.key, lock.commandID, 0, UNLOCK, lock.timeout)
 }
 
-func write_with_timeout(conn *net.UDPConn, command *command, timeout time.Duration) error {
+func writeWithTimeout(conn *net.UDPConn, command *command, timeout time.Duration) error {
 	conn.SetWriteDeadline(time.Now().Add(timeout))
 	defer conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
 	return write(conn, command)
 }
 
 func write(conn *net.UDPConn, command *command) error {
-	b := acquire_byte_buffer()
-	defer release_byte_buffer(b)
+	b := acquireByteBuffer()
+	defer releaseByteBuffer(b)
 
-	buf_size, err := command.marshal(b.buf)
+	bufSize, err := command.marshal(b.buf)
 	if err != nil {
 		return err
 	}
 
 	// say ("Send", len(msg), "bytes:", command, "from", conn.LocalAddr(), "to", conn.RemoteAddr(), "via", conn)
-	n, err := conn.Write(b.buf[0:buf_size])
+	n, err := conn.Write(b.buf[0:bufSize])
 	if err != nil {
 		return err
 	}
-	if n != buf_size { // ??? Такое бывает когда-нибудь?
+	if n != bufSize { // ??? Такое бывает когда-нибудь?
 		return errorln("Partial message send to", conn.RemoteAddr())
 	}
 
 	return nil
 }
 
-func read_with_timeout(conn *net.UDPConn, timeout time.Duration) (*response, error) {
+func readWithTimeout(conn *net.UDPConn, timeout time.Duration) (*response, error) {
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	defer conn.SetReadDeadline(time.Time{}) // убираем таймаут для будущих операций
 	return read(conn)
@@ -344,8 +344,8 @@ func read_with_timeout(conn *net.UDPConn, timeout time.Duration) (*response, err
 
 func read(conn *net.UDPConn) (*response, error) {
 
-	b := acquire_byte_buffer()
-	defer release_byte_buffer(b)
+	b := acquireByteBuffer()
+	defer releaseByteBuffer(b)
 
 	n, err := conn.Read(b.buf)
 	// say ("Received", n, "bytes from", conn.RemoteAddr())
@@ -353,10 +353,10 @@ func read(conn *net.UDPConn) (*response, error) {
 		return nil, err
 	}
 
-	response := acquire_response()
+	response := acquireResponse()
 	err = response.unmarshal(b.buf[:n])
 	if err != nil {
-		release_response(response)
+		releaseResponse(response)
 		return nil, err
 	}
 
@@ -375,10 +375,10 @@ func (response *response) unmarshal(buf []byte) error {
 		return errWrongResponse //errorln("unsupported protocol version", version)
 	}
 
-	buf_size := int(binary.LittleEndian.Uint16(buf[1:])) // 1 и 2 байты - размер пакета
+	bufSize := int(binary.LittleEndian.Uint16(buf[1:])) // 1 и 2 байты - размер пакета
 
-	if buf_size != len(buf) {
-		return errWrongResponse //errorln("wrong packet size", buf_size, len(buf), code2string(buf[3]))
+	if bufSize != len(buf) {
+		return errWrongResponse //errorln("wrong packet size", bufSize, len(buf), code2string(buf[3]))
 	}
 
 	response.code = buf[3] //  3 байт - команда: CONNECT, OPTIONS, LOCK , UNLOCK и т.д.
@@ -393,82 +393,82 @@ func (response *response) unmarshal(buf []byte) error {
 	switch response.code {
 
 	case OPTIONS:
-		if buf_size != 508 {
-			return errWrongResponse //errorln("wrong packet size", buf_size, "in OPTIONS")
+		if bufSize != 508 {
+			return errWrongResponse //errorln("wrong packet size", bufSize, "in OPTIONS")
 		}
-		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.nodeID = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connectionID = binary.LittleEndian.Uint64(buf[16:])
+		response.id.requestID = binary.LittleEndian.Uint64(buf[24:])
 
-		nodes_pos := 32
-		nodes_num := int(buf[nodes_pos])
-		if nodes_num < 1 || nodes_num > 7 { // максимум 7 нод. ??? надо ли больше?
-			return errWrongResponse //errorln("wrong number of nodes", nodes_num, "in OPTIONS")
+		nodesPos := 32
+		nodesNum := int(buf[nodesPos])
+		if nodesNum < 1 || nodesNum > 7 { // максимум 7 нод. ??? надо ли больше?
+			return errWrongResponse //errorln("wrong number of nodes", nodesNum, "in OPTIONS")
 		}
 
-		nodes_pos++
-		for i := nodes_num; i > 0; i-- {
+		nodesPos++
+		for i := nodesNum; i > 0; i-- {
 
-			//проверяем, что nodes_pos не выходит за границы buf
-			if (nodes_pos + 8 + 1) >= buf_size {
-				return errWrongResponse //errorln("wrong nodes position", nodes_pos, "in OPTIONS")
+			//проверяем, что nodesPos не выходит за границы buf
+			if (nodesPos + 8 + 1) >= bufSize {
+				return errWrongResponse //errorln("wrong nodes position", nodesPos, "in OPTIONS")
 			}
-			node_id := binary.LittleEndian.Uint64(buf[nodes_pos:])
-			nodes_pos += 8
+			nodeID := binary.LittleEndian.Uint64(buf[nodesPos:])
+			nodesPos += 8
 
-			node_string_size := int(buf[nodes_pos])
-			nodes_pos++
+			nodeStringSize := int(buf[nodesPos])
+			nodesPos++
 
-			//проверяем, что nodes_pos не выходит за границы buf
-			if (nodes_pos + node_string_size) > buf_size {
-				return errWrongResponse //errorln("wrong nodes string size: from", nodes_pos, "to", (nodes_pos + node_string_size), "in OPTIONS")
+			//проверяем, что nodesPos не выходит за границы buf
+			if (nodesPos + nodeStringSize) > bufSize {
+				return errWrongResponse //errorln("wrong nodes string size: from", nodesPos, "to", (nodesPos + nodeStringSize), "in OPTIONS")
 			}
 
-			node_string := string(buf[nodes_pos : nodes_pos+node_string_size])
-			nodes_pos += node_string_size
+			nodeString := string(buf[nodesPos : nodesPos+nodeStringSize])
+			nodesPos += nodeStringSize
 
-			response.nodes[node_id] = node_string
+			response.nodes[nodeID] = nodeString
 		}
 
 	case OK, TIMEOUT, BUSY:
-		if buf_size != 32 {
-			return errWrongResponse //errorln("wrong packet size", buf_size, "in", code2string(response.code))
+		if bufSize != 32 {
+			return errWrongResponse //errorln("wrong packet size", bufSize, "in", code2string(response.code))
 		}
-		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.nodeID = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connectionID = binary.LittleEndian.Uint64(buf[16:])
+		response.id.requestID = binary.LittleEndian.Uint64(buf[24:])
 
 	case REDIRECT:
-		if buf_size != 40 {
-			return errWrongResponse //errorln("wrong packet size", buf_size, "in REDIRECT")
+		if bufSize != 40 {
+			return errWrongResponse //errorln("wrong packet size", bufSize, "in REDIRECT")
 		}
-		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
-		response.node_id = binary.LittleEndian.Uint64(buf[32:])
+		response.id.nodeID = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connectionID = binary.LittleEndian.Uint64(buf[16:])
+		response.id.requestID = binary.LittleEndian.Uint64(buf[24:])
+		response.nodeID = binary.LittleEndian.Uint64(buf[32:])
 
 	case ERROR:
-		if buf_size < 33 {
-			return errWrongResponse //errorln("wrong packet size", buf_size, "in ERROR")
+		if bufSize < 33 {
+			return errWrongResponse //errorln("wrong packet size", bufSize, "in ERROR")
 		}
-		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.nodeID = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connectionID = binary.LittleEndian.Uint64(buf[16:])
+		response.id.requestID = binary.LittleEndian.Uint64(buf[24:])
 
-		desc_string_size := int(buf[32]) // 32 байт - размер адреса ноды
-		if desc_string_size+33 != buf_size {
-			return errWrongResponse //errorln("wrong description size", desc_string_size, buf_size, "in ERROR")
+		descStringSize := int(buf[32]) // 32 байт - размер адреса ноды
+		if descStringSize+33 != bufSize {
+			return errWrongResponse //errorln("wrong description size", descStringSize, bufSize, "in ERROR")
 		}
 
-		response.description = string(buf[33 : 33+desc_string_size])
+		response.description = string(buf[33 : 33+descStringSize])
 
 	case PONG:
-		if buf_size != 508 {
-			return errWrongResponse //errorln("wrong packet size", buf_size, "in PONG")
+		if bufSize != 508 {
+			return errWrongResponse //errorln("wrong packet size", bufSize, "in PONG")
 		}
-		response.id.node_id = binary.LittleEndian.Uint64(buf[8:])
-		response.id.connection_id = binary.LittleEndian.Uint64(buf[16:])
-		response.id.request_id = binary.LittleEndian.Uint64(buf[24:])
+		response.id.nodeID = binary.LittleEndian.Uint64(buf[8:])
+		response.id.connectionID = binary.LittleEndian.Uint64(buf[16:])
+		response.id.requestID = binary.LittleEndian.Uint64(buf[24:])
 
 	default:
 		return errWrongResponse //errorln("wrong command code:", fmt.Sprint(response.code))
@@ -477,32 +477,32 @@ func (response *response) unmarshal(buf []byte) error {
 	return nil
 }
 
-const default_byte_buffer_size = 508
+const defaultByteBufferSize = 508
 
-var byte_buffer_pool sync.Pool
+var byteBufferPool sync.Pool
 
-func acquire_byte_buffer() *byte_buffer {
-	v := byte_buffer_pool.Get()
+func acquireByteBuffer() *byteBuffer {
+	v := byteBufferPool.Get()
 	if v == nil {
-		return &byte_buffer{
-			buf: make([]byte, default_byte_buffer_size),
+		return &byteBuffer{
+			buf: make([]byte, defaultByteBufferSize),
 		}
 	}
-	return v.(*byte_buffer)
+	return v.(*byteBuffer)
 }
 
-func release_byte_buffer(b *byte_buffer) {
-	b.buf = b.buf[0:default_byte_buffer_size]
-	byte_buffer_pool.Put(b)
+func releaseByteBuffer(b *byteBuffer) {
+	b.buf = b.buf[0:defaultByteBufferSize]
+	byteBufferPool.Put(b)
 }
 
-type byte_buffer struct {
+type byteBuffer struct {
 	buf []byte
 }
 
 func (command *command) marshal(buf []byte) (int, error) {
 
-	buf_size := default_byte_buffer_size
+	bufSize := defaultByteBufferSize
 
 	buf[0] = 1 // version:=1
 	buf[3] = command.code
@@ -519,45 +519,45 @@ func (command *command) marshal(buf []byte) (int, error) {
 		// size:= расчитываем
 		// command := LOCK
 
-		binary.LittleEndian.PutUint64(buf[8:], command.id.node_id)
-		binary.LittleEndian.PutUint64(buf[16:], command.id.connection_id)
-		binary.LittleEndian.PutUint64(buf[24:], command.id.request_id)
+		binary.LittleEndian.PutUint64(buf[8:], command.id.nodeID)
+		binary.LittleEndian.PutUint64(buf[16:], command.id.connectionID)
+		binary.LittleEndian.PutUint64(buf[24:], command.id.requestID)
 
 		binary.LittleEndian.PutUint64(buf[32:], uint64(command.ttl))
 		binary.LittleEndian.PutUint64(buf[40:], uint64(command.timeout))
 
-		command_key := command.key
-		command_key_len := len(command_key)
-		if command_key_len > 255 {
+		commandKey := command.key
+		commandKeyLen := len(commandKey)
+		if commandKeyLen > 255 {
 			return 0, ErrLongKey
 		}
 
-		buf[48] = byte(command_key_len)
+		buf[48] = byte(commandKeyLen)
 
-		copy(buf[49:], command_key)
+		copy(buf[49:], commandKey)
 
-		buf_size = command_key_len + 49
+		bufSize = commandKeyLen + 49
 
 	case PING:
 		// version:=1
 		// size:= 508
 		// command := PING
 
-		binary.LittleEndian.PutUint64(buf[8:], command.id.node_id)
-		binary.LittleEndian.PutUint64(buf[16:], command.id.connection_id)
-		binary.LittleEndian.PutUint64(buf[24:], command.id.request_id)
+		binary.LittleEndian.PutUint64(buf[8:], command.id.nodeID)
+		binary.LittleEndian.PutUint64(buf[16:], command.id.connectionID)
+		binary.LittleEndian.PutUint64(buf[24:], command.id.requestID)
 
 	default:
 		return 0, errorln("wrong command ", command)
 	}
 
 	// выставляем длину пакета
-	binary.LittleEndian.PutUint16(buf[1:], uint16(buf_size))
+	binary.LittleEndian.PutUint16(buf[1:], uint16(bufSize))
 
 	// заполняем нулями место под чексумму
 	binary.LittleEndian.PutUint32(buf[4:], 0)
 
-	return buf_size, nil
+	return bufSize, nil
 
 }
 
@@ -565,32 +565,32 @@ func errorln(a ...interface{}) error {
 	return errors.New(fmt.Sprintln(a))
 }
 
-func acquire_command() *command {
-	c := command_pool.Get()
+func acquireCommand() *command {
+	c := commandPool.Get()
 	if c == nil {
 		timer := time.NewTimer(time.Hour) // ??? как иначе создать таймер с каналом C != nil?
 		timer.Stop()
 		return &command{
-			resp_chan:    make(chan error),
-			send_chan:    make(chan *node, 2),
-			process_chan: make(chan *response),
-			timer:        timer,
-			retries:      0,
+			respChan:    make(chan error),
+			sendChan:    make(chan *node, 2),
+			processChan: make(chan *response),
+			timer:       timer,
+			retries:     0,
 		}
 	}
 	return c.(*command)
 }
 
-func release_command(c *command) {
+func releaseCommand(c *command) {
 	//atomic.StoreInt32(&c.retries, 0)
 	c.retries = 0
-	command_pool.Put(c)
+	commandPool.Put(c)
 }
 
-var command_pool sync.Pool
+var commandPool sync.Pool
 
-func acquire_response() *response {
-	c := response_pool.Get()
+func acquireResponse() *response {
+	c := responsePool.Get()
 	if c == nil {
 		return &response{
 			nodes: make(map[uint64]string),
@@ -599,36 +599,36 @@ func acquire_response() *response {
 	return c.(*response)
 }
 
-func release_response(c *response) {
-	response_pool.Put(c)
+func releaseResponse(c *response) {
+	responsePool.Put(c)
 }
 
-var response_pool sync.Pool
+var responsePool sync.Pool
 
-func (command *command) is_enough_retries() bool {
+func (command *command) isEnoughRetries() bool {
 	//return atomic.AddInt32(&command.retries, 1) >= command.netmutex.retries
 	command.retries++
 	return command.retries >= command.netmutex.retries
 }
 
-func (netmutex *NetMutex) run_command(key string, command_id commandId, ttl time.Duration, command_code byte, timeout time.Duration) error {
+func (netmutex *NetMutex) runCommand(key string, commandID commandID, ttl time.Duration, commandCode byte, timeout time.Duration) error {
 
-	command := acquire_command()
-	defer release_command(command)
+	command := acquireCommand()
+	defer releaseCommand(command)
 
-	command.id = command_id
-	command.code = command_code
+	command.id = commandID
+	command.code = commandCode
 	command.key = key
 	command.ttl = ttl
 	command.timeout = timeout
 	command.netmutex = netmutex
 
-	netmutex.working_commands.add(command)
+	netmutex.workingCommands.add(command)
 
 	go command.run()
-	command.send_chan <- nil
+	command.sendChan <- nil
 
-	return <-command.resp_chan
+	return <-command.respChan
 }
 
 func (command *command) run() {
@@ -637,15 +637,15 @@ func (command *command) run() {
 		case <-command.netmutex.done:
 			return
 
-		case node := <-command.send_chan:
+		case node := <-command.sendChan:
 			command.send(node)
 
 		case <-command.timer.C:
-			if command.on_timeout() {
+			if command.onTimeout() {
 				return
 			}
 
-		case resp := <-command.process_chan:
+		case resp := <-command.processChan:
 			if command.process(resp) {
 				return
 			}
@@ -662,13 +662,13 @@ func (command *command) send(node *node) {
 			node, err = command.netmutex.node()
 			if err != nil { // некуда отправлять команду, поэтому сразу возвращаем ошибку
 
-				command.netmutex.working_commands.delete(command.id)
-				command.resp_chan <- err
+				command.netmutex.workingCommands.delete(command.id)
+				command.respChan <- err
 				return
 			}
 		}
 
-		command.current_node = node
+		command.currentNode = node
 
 		command.timer.Reset(node.timeout())
 
@@ -681,12 +681,12 @@ func (command *command) send(node *node) {
 
 		// если ошибка в том, что длина ключа слишком велика, то помечать ноду плохой не нужно
 		if err != ErrLongKey {
-			command.current_node.fail()
+			command.currentNode.fail()
 		}
 
-		if command.is_enough_retries() {
-			command.netmutex.working_commands.delete(command.id)
-			command.resp_chan <- ErrTooMuchRetries
+		if command.isEnoughRetries() {
+			command.netmutex.workingCommands.delete(command.id)
+			command.respChan <- ErrTooMuchRetries
 			return
 		}
 
@@ -695,14 +695,14 @@ func (command *command) send(node *node) {
 }
 
 // функция, вызывается, когда истёт таймаут на приход ответа от ноды
-func (command *command) on_timeout() bool {
-	command.current_node.fail()
+func (command *command) onTimeout() bool {
+	command.currentNode.fail()
 
-	if command.is_enough_retries() {
-		command.netmutex.working_commands.delete(command.id)
-		command.resp_chan <- ErrTooMuchRetries
+	if command.isEnoughRetries() {
+		command.netmutex.workingCommands.delete(command.id)
+		command.respChan <- ErrTooMuchRetries
 	} else {
-		command.send_chan <- nil
+		command.sendChan <- nil
 		return false
 	}
 	return true
@@ -713,52 +713,52 @@ func (command *command) process(resp *response) bool {
 
 	switch resp.code {
 	case OK:
-		command.current_node.ok()
-		command.netmutex.working_commands.delete(command.id)
-		command.resp_chan <- nil
+		command.currentNode.ok()
+		command.netmutex.workingCommands.delete(command.id)
+		command.respChan <- nil
 
 	case REDIRECT:
-		command.current_node.ok()
-		if command.is_enough_retries() {
-			command.netmutex.working_commands.delete(command.id)
-			command.resp_chan <- ErrTooMuchRetries
+		command.currentNode.ok()
+		if command.isEnoughRetries() {
+			command.netmutex.workingCommands.delete(command.id)
+			command.respChan <- ErrTooMuchRetries
 		} else {
-			command.send_chan <- command.netmutex.node_by_id(resp.node_id)
+			command.sendChan <- command.netmutex.nodeByID(resp.nodeID)
 			return false
 		}
 
 	case TIMEOUT:
-		command.current_node.ok()
-		command.netmutex.working_commands.delete(command.id)
-		command.resp_chan <- ErrTimeout
+		command.currentNode.ok()
+		command.netmutex.workingCommands.delete(command.id)
+		command.respChan <- ErrTimeout
 
 	case BUSY:
-		command.current_node.fail()
+		command.currentNode.fail()
 
-		if command.is_enough_retries() {
-			command.netmutex.working_commands.delete(command.id)
-			command.resp_chan <- ErrBusy
+		if command.isEnoughRetries() {
+			command.netmutex.workingCommands.delete(command.id)
+			command.respChan <- ErrBusy
 		} else { // пробуем другую ноду
-			command.send_chan <- nil
+			command.sendChan <- nil
 			return false
 		}
 
 	case ERROR:
-		command.current_node.ok()
-		command.netmutex.working_commands.delete(command.id)
-		command.resp_chan <- errors.New(resp.description)
+		command.currentNode.ok()
+		command.netmutex.workingCommands.delete(command.id)
+		command.respChan <- errors.New(resp.description)
 
 	default:
-		command.resp_chan <- errWrongResponse
+		command.respChan <- errWrongResponse
 	}
 
-	release_response(resp)
+	releaseResponse(resp)
 
 	return true
 }
 
 //  горутины (по числу нод) читают ответы из своих соединений и направляют их в канал ответов
-func (netmutex *NetMutex) read_responses(node *node) {
+func (netmutex *NetMutex) readResponses(node *node) {
 	conn := node.conn
 	for {
 		// выходим из цикла, если клиент закончил свою работу
@@ -770,7 +770,7 @@ func (netmutex *NetMutex) read_responses(node *node) {
 		}
 
 		// таймаут нужен для того, чтобы можно было корректно закончить работу клиента
-		resp, err := read_with_timeout(conn, time.Second)
+		resp, err := readWithTimeout(conn, time.Second)
 
 		// если произошёл таймаут или ошибка временная
 		if neterr, ok := err.(*net.OpError); ok {
@@ -794,7 +794,7 @@ func (netmutex *NetMutex) read_responses(node *node) {
 }
 
 // пытается открыть соединение
-func (netmutex *NetMutex) repair_conn(node *node) {
+func (netmutex *NetMutex) repairConn(node *node) {
 	for {
 		select {
 		case <-netmutex.done:
@@ -804,7 +804,7 @@ func (netmutex *NetMutex) repair_conn(node *node) {
 		default:
 		}
 
-		conn, err := open_conn(node.addr, netmutex.read_buffer_size, netmutex.write_buffer_size)
+		conn, err := openConn(node.addr, netmutex.readBufferSize, netmutex.writeBufferSize)
 
 		if err != nil {
 			node.fail()
@@ -813,7 +813,7 @@ func (netmutex *NetMutex) repair_conn(node *node) {
 		}
 		node.conn = conn
 
-		go netmutex.read_responses(node)
+		go netmutex.readResponses(node)
 		return
 	}
 }
@@ -826,47 +826,47 @@ func (netmutex *NetMutex) run() {
 			return
 		case resp := <-netmutex.responses:
 			if resp.code == OPTIONS {
-				// переконфигурация: новый список нод, новый уникальный command_id
+				// переконфигурация: новый список нод, новый уникальный commandID
 				// ToDo написать переконфигурацию
-				release_response(resp)
+				releaseResponse(resp)
 				continue
 			}
 
-			command, ok := netmutex.working_commands.get(resp.id)
-			// если команда не нашлась по Id, то ждём следующую
+			command, ok := netmutex.workingCommands.get(resp.id)
+			// если команда не нашлась по ID, то ждём следующую
 			if !ok {
-				release_response(resp)
+				releaseResponse(resp)
 				continue
 			}
-			command.process_chan <- resp
+			command.processChan <- resp
 		}
 	}
 }
 
-type working_commands struct {
+type workingCommands struct {
 	sync.RWMutex
-	m map[commandId]*command
+	m map[commandID]*command
 }
 
-func (wc *working_commands) add(command *command) {
+func (wc *workingCommands) add(command *command) {
 	wc.Lock()
 	wc.m[command.id] = command
 	wc.Unlock()
 }
 
-func (wc *working_commands) get(command_id commandId) (*command, bool) {
+func (wc *workingCommands) get(commandID commandID) (*command, bool) {
 	wc.RLock()
 	defer wc.RUnlock()
 
-	command, ok := wc.m[command_id]
+	command, ok := wc.m[commandID]
 	return command, ok
 }
 
-func (wc *working_commands) delete(command_id commandId) {
+func (wc *workingCommands) delete(commandID commandID) {
 	wc.Lock()
 	defer wc.Unlock()
 
-	delete(wc.m, command_id)
+	delete(wc.m, commandID)
 }
 
 const (
@@ -883,15 +883,15 @@ const (
 func Open(addrs []string, options *Options) (*NetMutex, error) {
 
 	netmutex := &NetMutex{
-		ttl:               DefaultTTL,
-		timeout:           DefaultTimeout,
-		retries:           DefaultRetries,
-		read_buffer_size:  DefaultReadBufferSize,
-		write_buffer_size: DefaultWriteBufferSize,
-		done:              make(chan struct{}),
-		responses:         make(chan *response),
-		working_commands: &working_commands{
-			m: make(map[commandId]*command),
+		ttl:             DefaultTTL,
+		timeout:         DefaultTimeout,
+		retries:         DefaultRetries,
+		readBufferSize:  DefaultReadBufferSize,
+		writeBufferSize: DefaultWriteBufferSize,
+		done:            make(chan struct{}),
+		responses:       make(chan *response),
+		workingCommands: &workingCommands{
+			m: make(map[commandID]*command),
 		},
 	}
 
@@ -906,59 +906,59 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 			netmutex.retries = options.Retries
 		}
 		if options.ReadBufferSize > 0 {
-			netmutex.read_buffer_size = options.ReadBufferSize
+			netmutex.readBufferSize = options.ReadBufferSize
 		}
 		if options.WriteBufferSize > 0 {
-			netmutex.write_buffer_size = options.WriteBufferSize
+			netmutex.writeBufferSize = options.WriteBufferSize
 		}
 	}
 
 	// обходим все сервера из списка
 	for _, addr := range addrs {
 
-		options, err := netmutex.connect_options(addr)
+		options, err := netmutex.connectOptions(addr)
 		if err != nil {
 			continue
 		}
 
-		netmutex.next_command_id = options.id
+		netmutex.nextCommandID = options.id
 
-		remote_nodes := make(map[uint64]*node)
+		remoteNodes := make(map[uint64]*node)
 
 		// пробуем соединиться с нодами из полученного в ответе списка,
 		// отправить им PING, получить PONG, тем самым проверив прохождение пакетов
 		// а у не прошедших проверку нод увеличить Fails
-		for node_id, node_addr := range options.nodes {
+		for nodeID, nodeAddr := range options.nodes {
 
-			remote_nodes[node_id] = &node{
-				id:   node_id,
-				addr: node_addr,
+			remoteNodes[nodeID] = &node{
+				id:   nodeID,
+				addr: nodeAddr,
 				mtu:  508, // ToDo брать из пинг-понга
 				rtt:  1,   // ToDo брать из пинг-понга
 			}
 
-			conn, err := open_conn(remote_nodes[node_id].addr, netmutex.read_buffer_size, netmutex.write_buffer_size)
+			conn, err := openConn(remoteNodes[nodeID].addr, netmutex.readBufferSize, netmutex.writeBufferSize)
 			if err != nil {
-				remote_nodes[node_id].fail()
+				remoteNodes[nodeID].fail()
 				continue
 			}
-			remote_nodes[node_id].conn = conn
+			remoteNodes[nodeID].conn = conn
 
-			err = netmutex.ping_pong(remote_nodes[node_id])
+			err = netmutex.pingPong(remoteNodes[nodeID])
 			if err != nil {
-				remote_nodes[node_id].fail()
+				remoteNodes[nodeID].fail()
 			}
 		}
 
 		netmutex.nodes = &nodes{
-			m: remote_nodes,
+			m: remoteNodes,
 		}
 
 		for _, node := range netmutex.nodes.m {
 			if node.conn != nil {
-				go netmutex.read_responses(node)
+				go netmutex.readResponses(node)
 			} else {
-				go netmutex.repair_conn(node)
+				go netmutex.repairConn(node)
 			}
 		}
 		go netmutex.run()
@@ -969,8 +969,8 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 	return nil, ErrNoNodes
 }
 
-func (netmutex *NetMutex) connect_options(addr string) (*response, error) {
-	conn, err := open_conn(addr, 0, 0)
+func (netmutex *NetMutex) connectOptions(addr string) (*response, error) {
+	conn, err := openConn(addr, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -981,12 +981,12 @@ func (netmutex *NetMutex) connect_options(addr string) (*response, error) {
 		code: CONNECT,
 	}
 
-	err = write_with_timeout(conn, req, time.Second)
+	err = writeWithTimeout(conn, req, time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := read_with_timeout(conn, time.Second)
+	resp, err := readWithTimeout(conn, time.Second)
 	if err != nil || resp.code != OPTIONS {
 		return nil, err
 	}
@@ -994,46 +994,46 @@ func (netmutex *NetMutex) connect_options(addr string) (*response, error) {
 	return resp, nil
 }
 
-func (netmutex *NetMutex) ping_pong(node *node) error {
-	ping_command := &command{
+func (netmutex *NetMutex) pingPong(node *node) error {
+	pingCommand := &command{
 		code: PING,
-		id:   netmutex.command_id(),
+		id:   netmutex.commandID(),
 	}
 
-	err := write_with_timeout(node.conn, ping_command, time.Second)
+	err := writeWithTimeout(node.conn, pingCommand, time.Second)
 	if err != nil {
 		return err
 	}
 
-	pong_command, err := read_with_timeout(node.conn, time.Second)
-	if err != nil || pong_command.code != PONG || pong_command.id != ping_command.id {
+	pongCommand, err := readWithTimeout(node.conn, time.Second)
+	if err != nil || pongCommand.code != PONG || pongCommand.id != pingCommand.id {
 		return err
 	}
 
 	return nil
 }
 
-func open_conn(addr string, read_buffer_size int, write_buffer_size int) (*net.UDPConn, error) {
-	node_addr, err := net.ResolveUDPAddr("udp", addr)
+func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPConn, error) {
+	nodeAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := net.DialUDP("udp", nil, node_addr)
+	conn, err := net.DialUDP("udp", nil, nodeAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	if write_buffer_size > 0 {
-		err = conn.SetReadBuffer(read_buffer_size)
+	if writeBufferSize > 0 {
+		err = conn.SetReadBuffer(readBufferSize)
 		if err != nil {
 			conn.Close()
 			return nil, err
 		}
 	}
 
-	if write_buffer_size > 0 {
-		err = conn.SetWriteBuffer(write_buffer_size)
+	if writeBufferSize > 0 {
+		err = conn.SetWriteBuffer(writeBufferSize)
 		if err != nil {
 			conn.Close()
 			return nil, err

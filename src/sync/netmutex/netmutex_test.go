@@ -10,7 +10,7 @@ func TestMain(m *testing.M) {
 	//flag.Parse()
 
 	for i := 1; i <= 3; i++ {
-		mock_node, err := Mock_start_node(uint64(i), map[uint64]string{
+		mockNode, err := MockStartNode(uint64(i), map[uint64]string{
 			1: "127.0.0.1:3001",
 			2: "127.0.0.1:3002",
 			3: "127.0.0.1:3003",
@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer Mock_stop_node(mock_node)
+		defer MockStopNode(mockNode)
 
 		log.Println("node", i, "successful started")
 	}

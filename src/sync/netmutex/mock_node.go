@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"net"
 	"time"
-	//"math/rand"
-	//"time"
 )
 
-func Mock_start_node(node_id uint64, mosk_nodes map[uint64]string) (chan bool, error) {
+func MockStartNode(nodeID uint64, moskNodes map[uint64]string) (chan bool, error) {
 
-	addr, err := net.ResolveUDPAddr("udp", mosk_nodes[node_id])
+	addr, err := net.ResolveUDPAddr("udp", moskNodes[nodeID])
 	if err != nil {
 		return nil, err
 	}
@@ -23,17 +21,17 @@ func Mock_start_node(node_id uint64, mosk_nodes map[uint64]string) (chan bool, e
 
 	done := make(chan bool)
 
-	go mock_run(conn, node_id, mosk_nodes, done)
+	go mockRun(conn, nodeID, moskNodes, done)
 
 	return done, nil
 }
 
-func Mock_stop_node(done chan bool) {
+func MockStopNode(done chan bool) {
 	close(done)
 	time.Sleep(200 * time.Millisecond) // ждём, пока закончится цикл в mock_run()
 }
 
-func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, done chan bool) {
+func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool) {
 	for {
 		// выходим из цикла, если надо закончить свою работу
 		select {
@@ -43,7 +41,7 @@ func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, d
 		default:
 		}
 
-		b := acquire_byte_buffer()
+		b := acquireByteBuffer()
 
 		// deadline нужен чтобы можно было выйти из цикла и завершить работу
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -59,13 +57,13 @@ func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, d
 
 		switch b.buf[3] {
 		case CONNECT:
-			go mock_on_connect(conn, addr, b, node_id, mosk_nodes)
+			go mockOnConnect(conn, addr, b, nodeID, moskNodes)
 
 		case LOCK, UNLOCK:
-			go mock_on_lock_unlock(conn, addr, b)
+			go mockOnLockUnlock(conn, addr, b)
 
 		case PING:
-			go mock_on_ping(conn, addr, b)
+			go mockOnPing(conn, addr, b)
 
 		default:
 			warn("Wrong command", fmt.Sprint(b.buf[3]), "from", addr, conn.LocalAddr(), conn.RemoteAddr())
@@ -73,29 +71,29 @@ func mock_run(conn *net.UDPConn, node_id uint64, mosk_nodes map[uint64]string, d
 	}
 }
 
-func mock_on_connect(conn *net.UDPConn, addr *net.UDPAddr, b *byte_buffer, node_id uint64, mosk_nodes map[uint64]string) {
-	defer release_byte_buffer(b)
+func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer, nodeID uint64, moskNodes map[uint64]string) {
+	defer releaseByteBuffer(b)
 	b.buf[3] = OPTIONS
 
-	binary.LittleEndian.PutUint64(b.buf[8:], node_id)
+	binary.LittleEndian.PutUint64(b.buf[8:], nodeID)
 	binary.LittleEndian.PutUint64(b.buf[16:], 1)
 	binary.LittleEndian.PutUint64(b.buf[24:], 0)
 
-	nodes_pos := 32
-	b.buf[nodes_pos] = byte(len(mosk_nodes))
-	nodes_pos++
-	for node_id, node_string := range mosk_nodes {
+	nodesPos := 32
+	b.buf[nodesPos] = byte(len(moskNodes))
+	nodesPos++
+	for nodeID, nodeString := range moskNodes {
 		// id ноды
-		binary.LittleEndian.PutUint64(b.buf[nodes_pos:], node_id)
-		nodes_pos += 8
+		binary.LittleEndian.PutUint64(b.buf[nodesPos:], nodeID)
+		nodesPos += 8
 
 		// длина адреса ноды
-		b.buf[nodes_pos] = byte(len(node_string))
-		nodes_pos++
+		b.buf[nodesPos] = byte(len(nodeString))
+		nodesPos++
 
 		// адрес ноды
-		copy(b.buf[nodes_pos:], node_string)
-		nodes_pos += len(node_string)
+		copy(b.buf[nodesPos:], nodeString)
+		nodesPos += len(nodeString)
 	}
 
 	_, err := conn.WriteToUDP(b.buf, addr)
@@ -105,8 +103,8 @@ func mock_on_connect(conn *net.UDPConn, addr *net.UDPAddr, b *byte_buffer, node_
 
 }
 
-func mock_on_lock_unlock(conn *net.UDPConn, addr *net.UDPAddr, b *byte_buffer) {
-	defer release_byte_buffer(b)
+func mockOnLockUnlock(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
+	defer releaseByteBuffer(b)
 	b.buf[3] = OK
 
 	// выставляем длину пакета
@@ -121,8 +119,8 @@ func mock_on_lock_unlock(conn *net.UDPConn, addr *net.UDPAddr, b *byte_buffer) {
 	}
 }
 
-func mock_on_ping(conn *net.UDPConn, addr *net.UDPAddr, b *byte_buffer) {
-	defer release_byte_buffer(b)
+func mockOnPing(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
+	defer releaseByteBuffer(b)
 	b.buf[3] = PONG
 	_, err := conn.WriteToUDP(b.buf, addr)
 	if err != nil {

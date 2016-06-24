@@ -25,7 +25,7 @@ func (r response) String() string {
 	case OK:
 		return fmt.Sprintf("OK %v", r.id)
 	case REDIRECT:
-		return fmt.Sprintf("REDIRECT %v to %v", r.id, r.node_id)
+		return fmt.Sprintf("REDIRECT %v to %v", r.id, r.nodeID)
 	case TIMEOUT:
 		return fmt.Sprintf("TIMEOUT %v", r.id)
 	case ERROR:
@@ -39,8 +39,8 @@ func (r response) String() string {
 	}
 }
 
-func (c commandId) String() string {
-	return fmt.Sprintf("%v-%v-%v", c.node_id, c.connection_id, c.request_id)
+func (c commandID) String() string {
+	return fmt.Sprintf("%v-%v-%v", c.nodeID, c.connectionID, c.requestID)
 }
 
 func (node node) String() string {
