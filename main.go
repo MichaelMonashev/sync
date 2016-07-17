@@ -8,7 +8,7 @@ import (
 	//	_ "net/http/pprof"
 	//	"runtime"
 
-	"sync/netmutex"
+	"github.com/MichaelMonashev/sync/netmutex"
 )
 
 func main() {

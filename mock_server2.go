@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"sync/netmutex"
+	"github.com/MichaelMonashev/sync/netmutex"
 )
 
 func main() {
