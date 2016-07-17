@@ -3,6 +3,13 @@
 Golang client library for reliable distributed lock-servers. Zero memory allocation. Goroutine-safe.
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
 
+# Goals
+
+ - No bugs.
+ - Keep API simple and stable.
+ - Low CPU/memory consumption (code inlining, avoid memory allocation, avoid memory copy).
+ - Simple, well-documented code. Suitable for easy porting to other languages.
+ - No tricks (for compatibility with future Go versions).
 
 ## Installing
 
@@ -14,7 +21,24 @@ After this command *sync/netmutex* is ready to use. Its source will be in:
 
     $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 
+## Documentation
+
+Web: [godoc.org/github.com/MichaelMonashev/sync/netmutex](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
+
+or comand-line:
+
+    $ go doc github.com/MichaelMonashev/sync/netmutex
+
 ## Example
+
+5 Steps:
+ - connect
+ - lock
+ - execute critical section
+ - unlock
+ - close connection
+
+Code:
 
     package main
 
@@ -25,14 +49,14 @@ After this command *sync/netmutex* is ready to use. Its source will be in:
     )
 
     func main() {
-            // Open connection to lock-server
+            // Open connection to lock-servers
             nm, err := netmutex.Open([]string{
                     "10.0.0.1:1234",
                     "10.0.0.2:1234",
                     "10.0.0.3:1234",
             }, &netmutex.Options{
                     Timeout: time.Minute, // try to lock()/unlock() during this time
-                    TTL:     time.Second, // unlock key after this duration
+                    TTL:     time.Second, // unlock a key after this duration
             })
             if err != nil {
                     fmt.Println("Connecting error:", err)
@@ -44,7 +68,7 @@ After this command *sync/netmutex* is ready to use. Its source will be in:
 
             key := "some key"
 
-            // Try to lock key
+            // Try to lock the key
             lock, err := nm.Lock(key)
             if err != nil {
                     fmt.Println("Error while lock key:", key, "error:", err)
@@ -56,10 +80,10 @@ After this command *sync/netmutex* is ready to use. Its source will be in:
             // Do something alone. Sleep, for example. ;-)
             time.Sleep(time.Millisecond)
 
-           // Try to unlock key
+           // Try to unlock the key
             err = nm.Unlock(lock)
             if err != nil {
-                    // No problem. Key will unlock automatically after expiration.
+                    // No problem. The key will unlock automatically after expiration.
                     fmt.Println("Error while unlock key:", key, "error:", err)
             }
     }
