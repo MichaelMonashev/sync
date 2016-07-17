@@ -88,7 +88,7 @@ Code:
             }
     }
 
-##Test sync/netmutex perfomance
+##Test sync/netmutex performance
 
 Start mock-servers:
 
