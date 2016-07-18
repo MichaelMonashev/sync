@@ -36,6 +36,7 @@ or run:
     err = nm.Unlock(lock)
 
 All steps:
+
  - connect
  - lock key
  - execute critical section
