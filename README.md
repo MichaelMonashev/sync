@@ -23,22 +23,26 @@ After this command *sync/netmutex* is ready to use. Its source will be in:
 
 ## Documentation
 
-Web: [godoc.org/github.com/MichaelMonashev/sync/netmutex](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
+See: [godoc.org/github.com/MichaelMonashev/sync/netmutex](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
 
-or comand-line:
+or run:
 
     $ godoc github.com/MichaelMonashev/sync/netmutex
 
 ## Example
 
-5 Steps:
+    lock, err := nm.Lock(key)
+    ...
+    err = nm.Unlock(lock)
+
+All steps:
  - connect
- - lock
+ - lock key
  - execute critical section
  - unlock
  - close connection
 
-Code:
+Full code:
 
     package main
 
