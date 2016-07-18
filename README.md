@@ -1,9 +1,9 @@
-#sync/netmutex - Go client to lock server
+# sync/netmutex - Go client to lock server
 
 Golang client library for reliable distributed lock-servers. Zero memory allocation. Goroutine-safe.
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
 
-# Goals
+## Goals
 
  - No bugs.
  - Keep API simple and stable.
@@ -27,7 +27,7 @@ Web: [godoc.org/github.com/MichaelMonashev/sync/netmutex](https://godoc.org/gith
 
 or comand-line:
 
-    $ go doc github.com/MichaelMonashev/sync/netmutex
+    $ godoc github.com/MichaelMonashev/sync/netmutex
 
 ## Example
 
