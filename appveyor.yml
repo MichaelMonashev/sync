@@ -11,13 +11,15 @@ install:
 - go version
 - go env
 - go get -v -t ./...
-- c:\go-x86\bin\go version
-- c:\go-x86\bin\go env
 
 build_script:
 - go build -v ./netmutex
 - go test -v -race ./netmutex
 - go vet ./netmutex
+- set GOROOT=C:\go
+- set GOTOOLDIR=C:\go\pkg\tool\windows_386
+- c:\go-x86\bin\go version
+- c:\go-x86\bin\go env
 - c:\go-x86\bin\go build -v ./netmutex
 - c:\go-x86\bin\go test -v -race ./netmutex
 - c:\go-x86\bin\go vet ./netmutex
