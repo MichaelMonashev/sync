@@ -15,7 +15,6 @@ install:
 build_script:
 - go build -v ./netmutex
 - go test -v -race ./netmutex
-- go vet ./netmutex
 - set GOROOT=c:\go-x86
 - set GOTOOLDIR=c:\go-x86\pkg\tool\windows_386
 - c:\go-x86\bin\go version
