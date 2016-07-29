@@ -17,11 +17,9 @@ go:
 - 1.4
 
 os:
-  - linux
-  - osx
+- linux
+- osx
 
 script:
-- diff -u <(echo -n) <(gofmt -d -s ./netmutex)
 - go build -v ./netmutex
 - go test -v ./netmutex
-- go vet ./netmutex
