@@ -13,7 +13,6 @@ install:
 - go get -v -t ./...
 - c:\go-x86\bin\go version
 - c:\go-x86\bin\go env
-- c:\go-x86\bin\go get -v -t ./...
 
 build_script:
 - go build -v ./netmutex
