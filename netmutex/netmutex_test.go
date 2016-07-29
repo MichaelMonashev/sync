@@ -14,9 +14,9 @@ import (
 type callback func(*net.UDPConn, *net.UDPAddr, *byteBuffer)
 
 var addresses []string = []string{
-		"127.0.0.1:3001",
-		"127.0.0.1:3002",
-		"127.0.0.1:3003"}
+	"127.0.0.1:3001",
+	"127.0.0.1:3002",
+	"127.0.0.1:3003"}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -91,7 +91,7 @@ func TestOpen3(t *testing.T) {
 		t.FailNow()
 	}
 
-	for _,v := range nm.nodes.m {
+	for _, v := range nm.nodes.m {
 		if v.fails != 1 {
 			t.Fail()
 		}
@@ -134,7 +134,7 @@ func TestConnectOptions1(t *testing.T) {
 
 	options, err := netmutex.connectOptions("127.0.0.1:3001")
 
-	if (err != nil) {
+	if err != nil {
 		t.FailNow()
 	}
 
@@ -164,7 +164,7 @@ func TestConnectOptions2(t *testing.T) {
 	_, err := netmutex.connectOptions("127.0.0.1:3004")
 
 	fmt.Println(err)
-	if(err == nil) {
+	if err == nil {
 		t.Error("must've been an error")
 	}
 }
@@ -180,17 +180,16 @@ func TestLock1(t *testing.T) {
 
 	lock, err := nm.Lock("test")
 
-	if (err != nil) {
+	if err != nil {
 		t.Fatal("can't lock", err)
 	}
 
 	err = nm.Unlock(lock)
 
-	if (err != nil) {
+	if err != nil {
 		t.Fatal("can't unlock", err)
 	}
 }
-
 
 func BenchmarkLock(b *testing.B) {
 
