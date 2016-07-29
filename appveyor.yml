@@ -21,5 +21,5 @@ build_script:
 - c:\go-x86\bin\go version
 - c:\go-x86\bin\go env
 - c:\go-x86\bin\go build -v ./netmutex
-- c:\go-x86\bin\go test -v -race ./netmutex
+- c:\go-x86\bin\go test -v ./netmutex
 - c:\go-x86\bin\go vet ./netmutex
