@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Коды ошибок
 var (
 	ErrNoNodes        = errors.New("No working nodes.")
 	ErrTimeout        = errors.New("Timeout exceeded.")
@@ -220,29 +221,29 @@ func (netmutex *NetMutex) nodeByID(nodeID uint64) *node {
 }
 
 // заблокировать, если не было заблокировано ранее
-func (netmutex *NetMutex) LockIfUnlocked(key string) (*Lock, error) {
-	return nil, errors.New("LockIfUnlocked() has not yet implemented.")
-}
+//func (netmutex *NetMutex) LockIfUnlocked(key string) (*Lock, error) {
+//	return nil, errors.New("LockIfUnlocked() has not yet implemented.")
+//}
 
 // заблокировать все или ниодного.
-func (netmutex *NetMutex) LockEach(keys []string) ([]*Lock, error) {
-	return nil, errors.New("LockEach() has not yet implemented.")
-}
+//func (netmutex *NetMutex) LockEach(keys []string) ([]*Lock, error) {
+//	return nil, errors.New("LockEach() has not yet implemented.")
+//}
 
 // заблокировать всё, что получится.
-func (netmutex *NetMutex) LockAny(keys []string) ([]*Lock, error) {
-	return nil, errors.New("LockAny() has not yet implemented.")
-}
+//func (netmutex *NetMutex) LockAny(keys []string) ([]*Lock, error) {
+//	return nil, errors.New("LockAny() has not yet implemented.")
+//}
 
 // заблокировать на чтение
-func (netmutex *NetMutex) RLock(key string) (*Lock, error) {
-	return netmutex.Lock(key) // ToDo переделать
-}
+//func (netmutex *NetMutex) RLock(key string) (*Lock, error) {
+//	return netmutex.Lock(key) // ToDo переделать
+//}
 
 // снять все блокировки
-func (netmutex *NetMutex) UnlockAll() error {
-	return errors.New("UnlockAll() has not yet implemented.")
-}
+//func (netmutex *NetMutex) UnlockAll() error {
+//	return errors.New("UnlockAll() has not yet implemented.")
+//}
 
 // за время timeout установить блокировку ключа key на время ttl
 // Lock(key string)
@@ -293,10 +294,10 @@ type Lock struct {
 	timeout   time.Duration
 }
 
-// Возвращает ключ, по которому произошла блокировка. Удоббен в LochEach() и LocjAny()
-func (lock *Lock) Key() string {
-	return lock.key
-}
+// Возвращает ключ, по которому произошла блокировка. Удоббен в LochEach() и LockAny()
+//func (lock *Lock) Key() string {
+//	return lock.key
+//}
 
 // за время timeout снять ранее установленную блокировку
 func (netmutex *NetMutex) Unlock(lock *Lock) error {
