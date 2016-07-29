@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -188,6 +189,27 @@ func TestLock1(t *testing.T) {
 
 	if err != nil {
 		t.Fatal("can't unlock", err)
+	}
+}
+
+// long key
+func TestLock2(t *testing.T) {
+	nm, err := Open(addresses, nil)
+
+	if err != nil {
+		t.Fail()
+	}
+	defer nm.Close()
+
+	bad_key := strings.Repeat("a", 300)
+
+	_, err = nm.Lock(bad_key)
+
+	if err == nil {
+		t.Fatal("must be error")
+	}
+	if err != ErrLongKey {
+		t.Fatal("expecting ErrLongKey, got", err)
 	}
 }
 
