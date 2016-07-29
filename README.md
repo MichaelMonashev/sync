@@ -5,21 +5,26 @@ Golang client library for reliable distributed lock-servers. Zero memory allocat
 
 ## Goals
 
- - No bugs.
- - Keep API simple and stable.
- - Low CPU/memory consumption (code inlining, avoid memory allocation, avoid memory copy).
- - Simple, well-documented code. Suitable for easy porting to other languages.
+ - No bugs;
+ - Keep API simple and stable;
+ - Low CPU/memory consumption (code inlining, avoid memory allocation, avoid memory copy);
+ - Simple, well-documented code. Suitable for easy porting to other languages;
  - No tricks (for compatibility with future Go versions).
+
+## Features
+
+ - IPv6 support;
+ - Cross-platform.
 
 ## Installing
 
 ### Using *go get*
 
-    $ go get github.com/MichaelMonashev/sync/netmutex
+	$ go get github.com/MichaelMonashev/sync/netmutex
 
 After this command *sync/netmutex* is ready to use. Its source will be in:
 
-    $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
+	$GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 
 ## Documentation
 
@@ -27,13 +32,13 @@ See: [godoc.org/github.com/MichaelMonashev/sync/netmutex](https://godoc.org/gith
 
 or run:
 
-    $ godoc github.com/MichaelMonashev/sync/netmutex
+	$ godoc github.com/MichaelMonashev/sync/netmutex
 
 ## Example
 
-    lock, err := nm.Lock(key)
-    ...
-    err = nm.Unlock(lock)
+	lock, err := nm.Lock(key)
+	...
+	err = nm.Unlock(lock)
 
 All steps:
 
@@ -45,64 +50,64 @@ All steps:
 
 Full code:
 
-    package main
+package main
 
-    import (
-            "fmt"
-            "github.com/MichaelMonashev/sync/netmutex"
-            "time"
-    )
+	import (
+		"fmt"
+		"github.com/MichaelMonashev/sync/netmutex"
+		"time"
+	)
 
-    func main() {
-            // Open connection to lock-servers
-            nm, err := netmutex.Open([]string{
-                    "10.0.0.1:1234",
-                    "10.0.0.2:1234",
-                    "10.0.0.3:1234",
-            }, &netmutex.Options{
-                    Timeout: time.Minute, // try to lock()/unlock() during this time
-                    TTL:     time.Second, // unlock a key after this duration
-            })
-            if err != nil {
-                    fmt.Println("Connecting error:", err)
-                    return
-            }
+	func main() {
+		// Open connection to lock-servers
+		nm, err := netmutex.Open([]string{
+			"10.0.0.1:1234",
+			"10.0.0.2:1234",
+			"10.0.0.3:1234",
+		}, &netmutex.Options{
+			Timeout: time.Minute, // try to lock()/unlock() during this time
+			TTL:     time.Second, // unlock a key after this duration
+		})
+		if err != nil {
+			fmt.Println("Connecting error:", err)
+			return
+		}
 
-            // Close connection after main() finished
-            defer nm.Close()
+		// Close connection after main() finished
+		defer nm.Close()
 
-            key := "some key"
+		key := "some key"
 
-            // Try to lock the key
-            lock, err := nm.Lock(key)
-            if err != nil {
-                    fmt.Println("Error while lock key:", key, "error:", err)
-                    return
-            }
+		// Try to lock the key
+		lock, err := nm.Lock(key)
+		if err != nil {
+			fmt.Println("Error while lock key:", key, "error:", err)
+			return
+		}
 
-            fmt.Println("Key:", key, "successful locked!")
+		fmt.Println("Key:", key, "successful locked!")
 
-            // Do something alone. Sleep, for example. ;-)
-            time.Sleep(time.Millisecond)
+		// Do something alone. Sleep, for example. ;-)
+		time.Sleep(time.Millisecond)
 
-           // Try to unlock the key
-            err = nm.Unlock(lock)
-            if err != nil {
-                    // No problem. The key will unlock automatically after expiration.
-                    fmt.Println("Error while unlock key:", key, "error:", err)
-            }
-    }
+		// Try to unlock the key
+		err = nm.Unlock(lock)
+		if err != nil {
+			// No problem. The key will unlock automatically after expiration.
+			fmt.Println("Error while unlock key:", key, "error:", err)
+		}
+	}
 
 ##Test sync/netmutex performance
 
 Start mock-servers:
 
-    $ cd $GOPATH/src/github.com/MichaelMonashev/sync
-    $ go run mosk_server1.go &
-    $ go run mosk_server2.go &
-    $ go run mosk_server3.go &
+	$ cd $GOPATH/src/github.com/MichaelMonashev/sync
+	$ go run mosk_server1.go &
+	$ go run mosk_server2.go &
+	$ go run mosk_server3.go &
 
 
 Start main.go for load testing:
 
-    $ go run main.go
+	$ go run main.go
