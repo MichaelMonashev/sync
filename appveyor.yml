@@ -2,6 +2,11 @@ version: "{build}"
 
 clone_folder: c:\gopath\src\github.com\MichaelMonashev\sync
 
+platform:
+- x86
+- x64
+- Any CPU
+
 environment:
  GOPATH: c:\gopath
 
@@ -14,5 +19,5 @@ install:
 
 build_script:
 - go build -v ./netmutex
-- go test -v ./netmutex
+- go test -v -race ./netmutex
 - go vet ./netmutex

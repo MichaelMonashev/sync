@@ -22,4 +22,4 @@ os:
 
 script:
 - go build -v ./netmutex
-- go test -v ./netmutex
+- go test -v -race ./netmutex
