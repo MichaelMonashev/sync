@@ -159,6 +159,7 @@ type NetMutex struct {
 	readBufferSize  int
 	writeBufferSize int
 	done            chan struct{}
+	done_err        chan error
 	responses       chan *response
 	nodes           *nodes
 	workingCommands *workingCommands
@@ -311,9 +312,28 @@ func (netmutex *NetMutex) Unlock(lock *Lock) error {
 }
 
 func writeWithTimeout(conn *net.UDPConn, command *command, timeout time.Duration) error {
-	conn.SetWriteDeadline(time.Now().Add(timeout))
-	defer conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
-	return write(conn, command)
+	err := conn.SetWriteDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return err
+	}
+
+	err = write(conn, command)
+	if err != nil {
+
+		err1 := conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
+		if err1 != nil {
+			return err1
+		}
+
+		return err
+	}
+
+	err = conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func write(conn *net.UDPConn, command *command) error {
@@ -338,9 +358,28 @@ func write(conn *net.UDPConn, command *command) error {
 }
 
 func readWithTimeout(conn *net.UDPConn, timeout time.Duration) (*response, error) {
-	conn.SetReadDeadline(time.Now().Add(timeout))
-	defer conn.SetReadDeadline(time.Time{}) // убираем таймаут для будущих операций
-	return read(conn)
+	err := conn.SetReadDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := read(conn)
+	if err != nil {
+
+		err1 := conn.SetReadDeadline(time.Time{}) // убираем таймаут для будущих операций
+		if err1 != nil {
+			return nil, err1
+		}
+
+		return nil, err
+	}
+
+	err = conn.SetReadDeadline(time.Time{}) // убираем таймаут для будущих операций
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func read(conn *net.UDPConn) (*response, error) {
@@ -765,7 +804,7 @@ func (netmutex *NetMutex) readResponses(node *node) {
 		// выходим из цикла, если клиент закончил свою работу
 		select {
 		case <-netmutex.done:
-			conn.Close()
+			netmutex.done_err <- conn.Close()
 			return
 		default:
 		}
@@ -890,6 +929,7 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 		readBufferSize:  DefaultReadBufferSize,
 		writeBufferSize: DefaultWriteBufferSize,
 		done:            make(chan struct{}),
+		done_err:        make(chan error),
 		responses:       make(chan *response),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*command),
@@ -976,19 +1016,34 @@ func (netmutex *NetMutex) connectOptions(addr string) (*response, error) {
 		return nil, err
 	}
 
-	defer conn.Close()
-
 	req := &command{
 		code: CONNECT,
 	}
 
 	err = writeWithTimeout(conn, req, time.Second)
 	if err != nil {
+
+		err1 := conn.Close()
+		if err1 != nil {
+			return nil, err1
+		}
+
 		return nil, err
 	}
 
 	resp, err := readWithTimeout(conn, time.Second)
 	if err != nil || resp.code != OPTIONS {
+
+		err1 := conn.Close()
+		if err1 != nil {
+			return nil, err1
+		}
+
+		return nil, err
+	}
+
+	err = conn.Close()
+	if err != nil {
 		return nil, err
 	}
 
@@ -1028,7 +1083,12 @@ func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPCon
 	if writeBufferSize > 0 {
 		err = conn.SetReadBuffer(readBufferSize)
 		if err != nil {
-			conn.Close()
+
+			err1 := conn.Close()
+			if err1 != nil {
+				return nil, err1
+			}
+
 			return nil, err
 		}
 	}
@@ -1036,7 +1096,12 @@ func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPCon
 	if writeBufferSize > 0 {
 		err = conn.SetWriteBuffer(writeBufferSize)
 		if err != nil {
-			conn.Close()
+
+			err1 := conn.Close()
+			if err1 != nil {
+				return nil, err1
+			}
+
 			return nil, err
 		}
 	}
@@ -1044,6 +1109,7 @@ func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPCon
 	return conn, nil
 }
 
-func (netmutex *NetMutex) Close() {
+func (netmutex *NetMutex) Close() error {
 	close(netmutex.done)
+	return <- netmutex.done_err
 }
