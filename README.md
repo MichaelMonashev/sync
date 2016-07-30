@@ -6,6 +6,7 @@ Golang client library for reliable distributed lock-servers. Zero memory allocat
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
 [![Travis CI](https://travis-ci.org/MichaelMonashev/sync.svg)](https://travis-ci.org/MichaelMonashev/sync)
 [![AppVeyor](https://ci.appveyor.com/api/projects/status/eit2o9qvcocqyhqd?svg=true)](https://ci.appveyor.com/project/MichaelMonashev/sync)
+[![Coverage Status](https://coveralls.io/repos/github/MichaelMonashev/sync/badge.svg?branch=master)](https://coveralls.io/github/MichaelMonashev/sync?branch=master)
 
 ## Goals
 
