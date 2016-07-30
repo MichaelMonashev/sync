@@ -252,12 +252,6 @@ func BenchmarkLockUnlock(b *testing.B) {
 	}
 }
 
-// go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
-// go tool pprof netmutex.test.exe mem.out
-
-// go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." netmutex -x
-// go tool pprof netmutex.test.exe cpu.out
-
 //
 // mock nodes code
 //
@@ -392,3 +386,15 @@ func mockOnPingBad(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 		warn(err)
 	}
 }
+
+
+// Keep this lines at the end of file
+
+// go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
+// go tool pprof netmutex.test.exe mem.out
+
+// go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." netmutex -x
+// go tool pprof netmutex.test.exe cpu.out
+
+// go test -cover -covermode=count -coverprofile=count.out
+// go tool cover -html=count.out
