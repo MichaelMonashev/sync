@@ -47,4 +47,4 @@ script:
 - go env
 - go build -v ./netmutex
 - if [[ "$GOARCH" == "amd64" ]]; then go test -v -race -covermode=count -coverprofile=profile.cov ./netmutex; else go test -v -covermode=count -coverprofile=profile.cov ./netmutex; fi
-- $HOME/gopath/bin/goveralls -coverprofile=profile.cov -service=travis-ci
+- if [[ "$GOARCH" == "amd64" ]]; then $HOME/gopath/bin/goveralls -coverprofile=profile.cov -service=travis-ci; fi
