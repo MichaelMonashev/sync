@@ -30,7 +30,7 @@ build:
     - script:
         name: go get
         code: |
-          go get -v -work -x
+          go get -t -v -work -x github.com/MichaelMonashev/sync/netmutex
 
     # Build the project
     - script:
