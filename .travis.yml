@@ -21,22 +21,22 @@ os:
 - osx
 
 env:
-- GOARCH=amd64
-- GOARCH=386
+- GIMME_ARCH=amd64
+- GIMME_ARCH=386
 
 matrix:
   exclude:
   - go: 1.4.3
-    env: GOARCH=386
+    env: GIMME_ARCH=386
 
   - go: 1.4.2
-    env: GOARCH=386
+    env: GIMME_ARCH=386
 
   - go: 1.4.1
-    env: GOARCH=386
+    env: GIMME_ARCH=386
 
   - go: 1.4
-    env: GOARCH=386
+    env: GIMME_ARCH=386
 
 script:
 - go version
