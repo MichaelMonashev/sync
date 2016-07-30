@@ -39,8 +39,8 @@ matrix:
     env: GIMME_ARCH=386
 
 before_install:
-- go get github.com/mattn/goveralls
-- go get golang.org/x/tools/cmd/cover
+- go get -v github.com/mattn/goveralls
+- go get -v golang.org/x/tools/cmd/cover
 
 script:
 - go version
