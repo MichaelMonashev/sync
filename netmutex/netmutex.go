@@ -1111,5 +1111,5 @@ func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPCon
 
 func (netmutex *NetMutex) Close() error {
 	close(netmutex.done)
-	return <- netmutex.done_err
+	return <-netmutex.done_err
 }
