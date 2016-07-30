@@ -21,5 +21,8 @@ os:
 - osx
 
 script:
+- go version
+- go env
 - go build -v ./netmutex
+- GOARCH=386 go build -v ./netmutex
 - go test -v -race ./netmutex
