@@ -225,8 +225,8 @@ func BenchmarkLock(b *testing.B) {
 
 	b.ResetTimer()
 
+	key := "a"
 	for n := 0; n < b.N; n++ {
-		key := "a"
 
 		locker.Lock(key)
 	}
@@ -242,8 +242,8 @@ func BenchmarkLockUnlock(b *testing.B) {
 
 	b.ResetTimer()
 
+	key := "a"
 	for n := 0; n < b.N; n++ {
-		key := "a"
 
 		lock, _ := locker.Lock(key)
 		if lock != nil {
