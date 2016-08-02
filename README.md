@@ -106,6 +106,8 @@ package main
 
 ##Performance
 
+Runtime modules produce all memory allocations. I think, it will fixed soon:
+
 	$ cd $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 	$ go test -v -benchmem -benchtime="20s" -bench="."
 	...
