@@ -106,7 +106,7 @@ package main
 
 ##Performance
 
-	$ cd $GOPATH/src/github.com/MichaelMonashev/sync
+	$ cd $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 	$ go test -v -benchmem -benchtime="20s" -bench="."
 	...
 	BenchmarkLock-8      	500000	 62164 ns/op	153 B/op	 6 allocs/op
