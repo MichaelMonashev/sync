@@ -201,9 +201,9 @@ func TestLock2(t *testing.T) {
 	}
 	defer nm.Close()
 
-	bad_key := strings.Repeat("a", 300)
+	badKey := strings.Repeat("a", 300)
 
-	_, err = nm.Lock(bad_key)
+	_, err = nm.Lock(badKey)
 
 	if err == nil {
 		t.Fatal("must be error")
@@ -227,7 +227,6 @@ func BenchmarkLock(b *testing.B) {
 
 	key := "a"
 	for n := 0; n < b.N; n++ {
-
 		locker.Lock(key)
 	}
 }
@@ -244,7 +243,6 @@ func BenchmarkLockUnlock(b *testing.B) {
 
 	key := "a"
 	for n := 0; n < b.N; n++ {
-
 		lock, _ := locker.Lock(key)
 		if lock != nil {
 			locker.Unlock(lock)
@@ -279,7 +277,7 @@ func mockStopNode(done chan bool) {
 	time.Sleep(200 * time.Millisecond) // ждём, пока закончится цикл в mock_run()
 }
 
-func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool, pongFunc func(*net.UDPConn, *net.UDPAddr, *byteBuffer)) {
+func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool, pongFunc callback) {
 	for {
 		// выходим из цикла, если надо закончить свою работу
 		select {
@@ -353,6 +351,8 @@ func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer, nodeID u
 
 func mockOnLockUnlock(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 	defer releaseByteBuffer(b)
+
+	// Код ответа
 	b.buf[3] = OK
 
 	// выставляем длину пакета
@@ -390,7 +390,7 @@ func mockOnPingBad(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 // Keep this lines at the end of file
 
 // go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
-// go tool pprof netmutex.test.exe mem.out
+// go tool pprof --alloc_objects netmutex.test.exe mem.out
 
 // go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." netmutex -x
 // go tool pprof netmutex.test.exe cpu.out

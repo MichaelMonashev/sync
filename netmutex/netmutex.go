@@ -159,7 +159,7 @@ type NetMutex struct {
 	readBufferSize  int
 	writeBufferSize int
 	done            chan struct{}
-	done_err        chan error
+	doneErr         chan error
 	responses       chan *response
 	nodes           *nodes
 	workingCommands *workingCommands
@@ -804,7 +804,7 @@ func (netmutex *NetMutex) readResponses(node *node) {
 		// выходим из цикла, если клиент закончил свою работу
 		select {
 		case <-netmutex.done:
-			netmutex.done_err <- conn.Close()
+			netmutex.doneErr <- conn.Close()
 			return
 		default:
 		}
@@ -929,7 +929,7 @@ func Open(addrs []string, options *Options) (*NetMutex, error) {
 		readBufferSize:  DefaultReadBufferSize,
 		writeBufferSize: DefaultWriteBufferSize,
 		done:            make(chan struct{}),
-		done_err:        make(chan error),
+		doneErr:         make(chan error),
 		responses:       make(chan *response),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*command),
@@ -1111,5 +1111,5 @@ func openConn(addr string, readBufferSize int, writeBufferSize int) (*net.UDPCon
 
 func (netmutex *NetMutex) Close() error {
 	close(netmutex.done)
-	return <-netmutex.done_err
+	return <-netmutex.doneErr
 }
