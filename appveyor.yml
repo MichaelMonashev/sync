@@ -15,9 +15,11 @@ install:
 build_script:
 - go build -v -work -x ./netmutex
 - go test -v -race ./netmutex
+- go test -v -benchmem -benchtime="20s" -bench="." ./netmutex
 - set GOROOT=c:\go-x86
 - set GOTOOLDIR=c:\go-x86\pkg\tool\windows_386
 - c:\go-x86\bin\go version
 - c:\go-x86\bin\go env
 - c:\go-x86\bin\go build -v -work -x ./netmutex
 - c:\go-x86\bin\go test -v ./netmutex
+- c:\go-x86\bin\go test -v -benchmem -benchtime="20s" -bench="." ./netmutex
