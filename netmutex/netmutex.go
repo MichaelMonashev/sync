@@ -69,35 +69,35 @@ const (
 	ERROR                 // ответ: ошибка
 )
 
-func code2string(code byte) string {
-	switch code {
-	case CONNECT:
-		return "CONNECT"
-	case OPTIONS:
-		return "OPTIONS"
-	case LOCK:
-		return "LOCK"
-	case UNLOCK:
-		return "UNLOCK"
-	case OK:
-		return "OK"
-	case REDIRECT:
-		return "REDIRECT"
-	case TIMEOUT:
-		return "TIMEOUT"
-	case BUSY:
-		return "BUSY"
-	case ERROR:
-		return "ERROR"
-	case PING:
-		return "PING"
-	case PONG:
-		return "PONG"
-	default:
-		fmt.Fprintln(os.Stderr, "Wrong code:", fmt.Sprint(code))
-		return ""
-	}
-}
+//func code2string(code byte) string {
+//	switch code {
+//	case CONNECT:
+//		return "CONNECT"
+//	case OPTIONS:
+//		return "OPTIONS"
+//	case LOCK:
+//		return "LOCK"
+//	case UNLOCK:
+//		return "UNLOCK"
+//	case OK:
+//		return "OK"
+//	case REDIRECT:
+//		return "REDIRECT"
+//	case TIMEOUT:
+//		return "TIMEOUT"
+//	case BUSY:
+//		return "BUSY"
+//	case ERROR:
+//		return "ERROR"
+//	case PING:
+//		return "PING"
+//	case PONG:
+//		return "PONG"
+//	default:
+//		fmt.Fprintln(os.Stderr, "Wrong code:", fmt.Sprint(code))
+//		return ""
+//	}
+//}
 
 type commandID struct {
 	nodeID       uint64
