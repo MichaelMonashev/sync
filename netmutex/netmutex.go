@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-//	"os"
 	"sync"
 	"sync/atomic"
 	"time"
