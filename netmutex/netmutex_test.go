@@ -387,6 +387,10 @@ func mockOnPingBad(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 	}
 }
 
+func warn(a ...interface{}) {
+	fmt.Fprintln(os.Stderr, a)
+}
+
 // Keep this lines at the end of file
 
 // go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
