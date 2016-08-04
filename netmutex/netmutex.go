@@ -255,9 +255,9 @@ func (netmutex *NetMutex) Lock(key string) (*Lock, error) {
 
 	timeout := netmutex.timeout
 	ttl := netmutex.ttl
-	commandID := netmutex.commandID()
+	nextCommandID := netmutex.commandID()
 
-	err := netmutex.runCommand(key, commandID, ttl, LOCK, timeout)
+	err := netmutex.runCommand(key, nextCommandID, ttl, LOCK, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (netmutex *NetMutex) Lock(key string) (*Lock, error) {
 
 	lock.key = key
 	lock.netmutex = netmutex
-	lock.commandID = commandID
+	lock.commandID = nextCommandID
 	lock.timeout = timeout
 
 	return lock, nil
