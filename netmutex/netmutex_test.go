@@ -111,9 +111,9 @@ func TestCommandId(t *testing.T) {
 	connectionID := nm.nextCommandID.connectionID
 	requestID := nm.nextCommandID.requestID
 
-	nextCommandId := nm.commandID()
+	nextCommandID := nm.commandID()
 
-	if !(nextCommandId.nodeID == nodeID && nextCommandId.connectionID == connectionID && nextCommandId.requestID == requestID+1) {
+	if !(nextCommandID.nodeID == nodeID && nextCommandID.connectionID == connectionID && nextCommandID.requestID == requestID+1) {
 		t.Fail()
 	}
 }
