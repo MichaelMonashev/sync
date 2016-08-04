@@ -26,9 +26,9 @@ var (
 
 type response struct {
 	id          commandID         // уникальный номер команды
-	nodes       map[uint64]string // список нод при OPTIONS
 	nodeID      uint64            // адрес ноды при REDIRECT
 	description string            // описание ошибки при ERROR
+	nodes       map[uint64]string // список нод при OPTIONS
 	code        byte              // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
 
@@ -106,11 +106,11 @@ type commandID struct {
 
 type node struct {
 	id    uint64
+	addr  string
+	conn  *net.UDPConn
 	fails uint32
 	mtu   uint32
 	rtt   uint32
-	addr  string
-	conn  *net.UDPConn
 }
 
 func (node *node) fail() {
@@ -327,12 +327,7 @@ func writeWithTimeout(conn *net.UDPConn, command *command, timeout time.Duration
 		return err
 	}
 
-	err = conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return conn.SetWriteDeadline(time.Time{}) // убираем таймаут для будущих операций
 }
 
 func write(conn *net.UDPConn, command *command) error {
