@@ -14,10 +14,11 @@ import (
 
 type callback func(*net.UDPConn, *net.UDPAddr, *byteBuffer)
 
-var addresses []string = []string{
+var addresses = []string{
 	"127.0.0.1:3001",
 	"127.0.0.1:3002",
-	"127.0.0.1:3003"}
+	"127.0.0.1:3003",
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -106,6 +107,7 @@ func TestCommandId(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
+
 	defer nm.Close()
 
 	nodeID := nm.nextCommandID.nodeID
@@ -165,7 +167,6 @@ func TestConnectOptions2(t *testing.T) {
 	}
 
 	_, err := netmutex.connectOptions("127.0.0.1:3004")
-
 	if err == nil {
 		t.Error("must've been an error")
 	}
@@ -203,7 +204,6 @@ func TestLock2(t *testing.T) {
 	badKey := strings.Repeat("a", 300)
 
 	_, err = nm.Lock(badKey)
-
 	if err == nil {
 		t.Fatal("must be error")
 	}
@@ -289,8 +289,8 @@ func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done
 
 		// deadline нужен чтобы можно было выйти из цикла и завершить работу
 		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		_, addr, err := conn.ReadFromUDP(b.buf)
 
+		_, addr, err := conn.ReadFromUDP(b.buf)
 		if err != nil {
 			// если произошёл не таймаут, а что-то другое
 			if neterr, ok := err.(*net.OpError); !ok || !neterr.Timeout() {
