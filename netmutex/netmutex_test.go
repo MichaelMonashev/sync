@@ -86,6 +86,7 @@ func TestOpen3(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
+
 	defer nm.Close()
 
 	if len(nm.nodes.m) != 1 {
@@ -142,6 +143,7 @@ func TestConnectOptions1(t *testing.T) {
 	if options.code != OPTIONS {
 		t.Error("bad code received")
 	}
+
 	if len(options.nodes) != 3 {
 		t.Error("wrong number of nodes: want 3 got ", len(options.nodes))
 	}
@@ -164,7 +166,6 @@ func TestConnectOptions2(t *testing.T) {
 
 	_, err := netmutex.connectOptions("127.0.0.1:3004")
 
-	fmt.Println(err)
 	if err == nil {
 		t.Error("must've been an error")
 	}
@@ -173,20 +174,18 @@ func TestConnectOptions2(t *testing.T) {
 // Lock/Unlock
 func TestLock1(t *testing.T) {
 	nm, err := Open(addresses, nil)
-
 	if err != nil {
 		t.Fail()
 	}
+
 	defer nm.Close()
 
 	lock, err := nm.Lock("test")
-
 	if err != nil {
 		t.Fatal("can't lock", err)
 	}
 
 	err = nm.Unlock(lock)
-
 	if err != nil {
 		t.Fatal("can't unlock", err)
 	}
@@ -195,10 +194,10 @@ func TestLock1(t *testing.T) {
 // long key
 func TestLock2(t *testing.T) {
 	nm, err := Open(addresses, nil)
-
 	if err != nil {
 		t.Fail()
 	}
+
 	defer nm.Close()
 
 	badKey := strings.Repeat("a", 300)
@@ -216,7 +215,6 @@ func TestLock2(t *testing.T) {
 func BenchmarkLock(b *testing.B) {
 
 	locker, err := Open(addresses, nil)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -233,10 +231,10 @@ func BenchmarkLock(b *testing.B) {
 func BenchmarkLockUnlock(b *testing.B) {
 
 	locker, err := Open(addresses, nil)
-
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer locker.Close()
 
 	b.ResetTimer()
@@ -253,7 +251,7 @@ func BenchmarkLockUnlock(b *testing.B) {
 //
 // mock nodes code
 //
-func mockStartNode(nodeID uint64, moskNodes map[uint64]string, pongFunc callback) (chan bool, error) {
+func mockStartNode(nodeID uint64, moskNodes map[uint64]string, mockPongFunc callback) (chan bool, error) {
 
 	addr, err := net.ResolveUDPAddr("udp", moskNodes[nodeID])
 	if err != nil {
@@ -267,7 +265,7 @@ func mockStartNode(nodeID uint64, moskNodes map[uint64]string, pongFunc callback
 
 	done := make(chan bool)
 
-	go mockRun(conn, nodeID, moskNodes, done, pongFunc)
+	go mockRun(conn, nodeID, moskNodes, done, mockPongFunc)
 
 	return done, nil
 }
@@ -277,7 +275,7 @@ func mockStopNode(done chan bool) {
 	time.Sleep(200 * time.Millisecond) // ждём, пока закончится цикл в mock_run()
 }
 
-func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool, pongFunc callback) {
+func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool, mockPongFunc callback) {
 	for {
 		// выходим из цикла, если надо закончить свою работу
 		select {
@@ -309,10 +307,11 @@ func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done
 			go mockOnLockUnlock(conn, addr, b)
 
 		case PING:
-			go pongFunc(conn, addr, b)
+			go mockPongFunc(conn, addr, b)
 
 		default:
 			warn("Wrong command", fmt.Sprint(b.buf[3]), "from", addr, conn.LocalAddr(), conn.RemoteAddr())
+			releaseByteBuffer(b)
 		}
 	}
 }
@@ -369,7 +368,9 @@ func mockOnLockUnlock(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 
 func mockOnPing(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 	defer releaseByteBuffer(b)
+
 	b.buf[3] = PONG
+
 	_, err := conn.WriteToUDP(b.buf, addr)
 	if err != nil {
 		warn(err)
@@ -380,7 +381,9 @@ func mockOnPing(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 // нужно для тестирования правильности отработки коннекта
 func mockOnPingBad(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 	defer releaseByteBuffer(b)
+
 	b.buf[3] = TIMEOUT
+
 	_, err := conn.WriteToUDP(b.buf, addr)
 	if err != nil {
 		warn(err)
