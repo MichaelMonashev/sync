@@ -70,4 +70,4 @@ script:
 - go test -cpu=1,2 -v -run=none -benchmem -benchtime="5s" -bench="Benchmark." ./netmutex
 
 after_success:
-- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then bash <(curl -s https://codecov.io/bash); fi
+- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then bash <(curl -s https://codecov.io/bash) -t 92d3bdb3-3f81-489e-8565-8b2ef0af76eb; fi
