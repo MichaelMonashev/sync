@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	// Максимальная допустимая длина ключа.
+	// MaxKeySize - максимальная допустимая длина ключа.
 	MaxKeySize = 255
-	// Максимальная допустимая длина информации для изоляции клиента в случае его неработоспособности.
+	// MaxIsolationInfo - максимальная допустимая длина информации для изоляции клиента в случае его неработоспособности.
 	MaxIsolationInfo = 400
 )
 
@@ -72,7 +72,7 @@ type Options struct {
 	//	WriteBufferSize int // Sets the size of the operating system's transmit buffer associated with connections.
 }
 
-// NetMutex
+// NetMutex - блокировка по сети
 type NetMutex struct {
 	nextCommandID commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	//	ttl             time.Duration // значение по умолчанию для Lock(), Unlock()
@@ -245,7 +245,7 @@ func (nm *NetMutex) Update(retries int, timeout time.Duration, lock *Lock, ttl t
 	return nm.runCommand(lock.key, nm.commandID(), code.UPDATE, timeout, ttl, lock.commandID, retries)
 }
 
-// Пытается снять блокировку у ключа key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
+// Unlock пытается снять блокировку у ключа key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
 func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error {
 	if lock == nil {
 		return errLockIsNil

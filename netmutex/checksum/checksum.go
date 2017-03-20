@@ -5,7 +5,7 @@ import (
 	"crypto/md5"
 )
 
-// Checksum size
+// Size is checksum size
 const Size = md5.Size
 
 // Checksum returns the MD5 checksum of buf.
