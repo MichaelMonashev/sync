@@ -247,7 +247,7 @@ func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error
 }
 
 // Пытается снять все блокировки, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
-// Использовать с осторожностью!!! Клиенты, у которых блокировки установлены изолируются!
+// Использовать с осторожностью!!! Клиенты, у которых блокировки установлены, изолируются!
 func (nm *NetMutex) UnlockAll(retries int, timeout time.Duration) error {
 	return nm.runCommand("", nm.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
 }
