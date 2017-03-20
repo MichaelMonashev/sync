@@ -189,6 +189,10 @@ func TestLock1(t *testing.T) {
 			t.Fatal("can't lock", err)
 		}
 
+		if lock == nil {
+			t.Fatal("lock can't be nil")
+		}
+
 		err = nm.Unlock(retries, timeout, lock)
 
 		if err != nil {
@@ -218,6 +222,60 @@ func TestLock2(t *testing.T) {
 	}
 	if err != ErrLongKey {
 		t.Fatal("expecting ErrLongKey, got", err)
+	}
+}
+
+// update
+func TestLockUpdate(t *testing.T) {
+	nm, err := Open(10, time.Minute, addresses, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nm.Close(1, time.Minute)
+
+	retries := 10
+	timeout := time.Minute
+	ttl := time.Second
+
+	key := "a"
+
+	lock, err := nm.Lock(retries, timeout, key, ttl)
+
+	if err != nil {
+		t.Fatal("can't lock", err)
+	}
+
+	if lock == nil {
+		t.Fatal("lock can't be nil")
+	}
+
+	err = nm.Update(retries, timeout, lock, ttl)
+
+	if err != nil {
+		t.Fatal("can't update", err)
+	}
+
+	err = nm.Unlock(retries, timeout, lock)
+
+	if err != nil {
+		t.Fatal("can't unlock", err)
+	}
+}
+
+func TestUlockall(t *testing.T) {
+	nm, err := Open(10, time.Minute, addresses, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nm.Close(1, time.Minute)
+
+	retries := 10
+	timeout := time.Minute
+
+	err = nm.UnlockAll(retries, timeout)
+
+	if err != nil {
+		t.Fatal("can't unlock all", err)
 	}
 }
 
@@ -417,13 +475,17 @@ func mockProccessReq(b *byteBuffer, n int, serverID uint64, moskServers map[uint
 			mockOk(conn, addr, b.buf[pos:])
 			pos += 42 + int(b.buf[pos+41]) + 24
 
+		case code.UPDATE:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 66 + int(b.buf[pos+65]) + 24
+
 		case code.UNLOCK:
 			mockOk(conn, addr, b.buf[pos:])
 			pos += 58 + int(b.buf[pos+57])
 
-		case code.UPDATE:
+		case code.UNLOCKALL:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 66 + int(b.buf[pos+65]) + 24
+			pos += 33
 
 		default:
 			warn("Wrong command", fmt.Sprint(b.buf[pos+0]), pos, n, b.buf)
