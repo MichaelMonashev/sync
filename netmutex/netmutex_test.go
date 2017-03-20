@@ -209,9 +209,9 @@ func TestLock2(t *testing.T) {
 	timeout := time.Minute
 	ttl := time.Second
 
-	bad_key := strings.Repeat("a", 300)
+	badKey := strings.Repeat("a", 300)
 
-	_, err = nm.Lock(retries, timeout, bad_key, ttl)
+	_, err = nm.Lock(retries, timeout, badKey, ttl)
 
 	if err == nil {
 		t.Fatal("must be error")

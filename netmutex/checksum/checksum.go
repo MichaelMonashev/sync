@@ -1,11 +1,11 @@
-// Package checksum считает контрольную сумму.
+// Package checksum calculate hash function value.
 package checksum
 
 import (
-	//"hash/crc64"
 	"crypto/md5"
 )
 
+// Checksum size
 const Size = md5.Size
 
 // Checksum returns the MD5 checksum of buf.
