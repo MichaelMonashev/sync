@@ -59,5 +59,9 @@ script:
 - go version
 - go env
 - go build -v -work -x ./netmutex
-- if [[ "$GOARCH" == "amd64" ]]; then go test -v -race ./netmutex; else go test -v ./netmutex; fi
-- go test -v -run=none -benchmem -benchtime="5s" -bench="Benchmark." ./netmutex
+- if [[ "$GOARCH" == "amd64" ]]; then go test -cpu=1,2 -v -race ./netmutex; else go test -cpu=1,2 -v ./netmutex; fi
+- if [[ "$GOARCH$GOOS$TRAVIS_GO_VERSION" == "amd64linux1.8" ]];  then go test -race -coverprofile=coverage.txt -covermode=atomic ./netmutex; fi
+- go test -cpu=1,2 -v -run=none -benchmem -benchtime="5s" -bench="Benchmark." ./netmutex
+
+after_success:
+- if [[ "$GOARCH$GOOS$TRAVIS_GO_VERSION" == "amd64linux1.8" ]]; then bash <(curl -s https://codecov.io/bash) -t 92d3bdb3-3f81-489e-8565-8b2ef0af76eb; fi
