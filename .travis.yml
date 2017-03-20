@@ -2,6 +2,14 @@ language: go
 
 go:
 - tip
+- 1.8
+- 1.7.5
+- 1.7.4
+- 1.7.3
+- 1.7.2
+- 1.7.1
+- 1.7
+- 1.6.4
 - 1.6.3
 - 1.6.2
 - 1.6.1
@@ -52,4 +60,4 @@ script:
 - go env
 - go build -v -work -x ./netmutex
 - if [[ "$GOARCH" == "amd64" ]]; then go test -v -race ./netmutex; else go test -v ./netmutex; fi
-- go test -v -benchmem -benchtime="20s" -bench="." ./netmutex
+- go test -v -benchmem -benchtime="5s" -bench="." ./netmutex

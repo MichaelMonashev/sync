@@ -2,7 +2,6 @@ package netmutex
 
 import (
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -10,200 +9,209 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MichaelMonashev/sync/netmutex/checksum"
+	"github.com/MichaelMonashev/sync/netmutex/code"
 )
 
-type callback func(*net.UDPConn, *net.UDPAddr, *byteBuffer)
+type callback func(*net.UDPConn, *net.UDPAddr, []byte)
 
-var addresses = []string{
+var addresses []string = []string{
 	"127.0.0.1:3001",
 	"127.0.0.1:3002",
-	"127.0.0.1:3003",
-}
+	"127.0.0.1:3003"}
 
 func TestMain(m *testing.M) {
-	flag.Parse()
-
-	// запускаем правильно функционирующие ноды
+	// запускаем правильно функционирующие сервера
 	for i := 1; i <= 3; i++ {
-		mockNode, err := mockStartNode(uint64(i), map[uint64]string{
+		mockServer, err := mockStartServer(uint64(i), map[uint64]string{
 			1: "127.0.0.1:3001",
 			2: "127.0.0.1:3002",
 			3: "127.0.0.1:3003",
-		}, mockOnPing)
+		}, mockOk)
 
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer mockStopNode(mockNode)
+		defer mockStopServer(mockServer)
 
-		log.Println("node", i, "successful started")
+		fmt.Println("mock server", i, "successful started")
 	}
 
-	// запускаем кривую ноду, которая неправильно понгает
-	mockNode1, err := mockStartNode(uint64(4), map[uint64]string{
+	// запускаем кривой сервер, который неправильно понгает
+	mockServer1, err := mockStartServer(uint64(4), map[uint64]string{
 		4: "127.0.0.1:3005",
-	}, mockOnPingBad)
+	}, mockLocked)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("node", 4, "successful started")
-	defer mockStopNode(mockNode1)
+	fmt.Println("mock server", 4, "successful started")
+	defer mockStopServer(mockServer1)
 
 	os.Exit(m.Run())
 }
 
 // штатная попытка соединения
 func TestOpen1(t *testing.T) {
-	nm, err := Open(addresses,
+	nm, err := Open(10, time.Minute, addresses,
 		nil)
 
 	if err != nil {
-		t.Fail()
-	} else {
-		nm.Close()
+		t.Fatal(err)
 	}
+
+	nm.Close(1, time.Minute)
 }
 
-// попытаемся соединиться с несуществующей нодой
+// попытаемся соединиться с несуществующим сервером
 // должна произойти ошибка
 func TestOpen2(t *testing.T) {
-	nm, err := Open([]string{
+	nm, err := Open(10, time.Second, []string{
 		"127.0.0.1:3004"},
 		nil)
 
 	if err == nil {
-		t.Fail()
-		nm.Close()
+		nm.Close(1, time.Second)
+		t.Fatal()
 	}
 }
 
-// попытаемся соединиться с нодой, которая неправильно понгает
-// у ноды fails увеличивается
+// попытаемся соединиться с сервером, который неправильно понгает
+// у сервера fails должен увеличиться
 func TestOpen3(t *testing.T) {
-	nm, err := Open([]string{
+	nm, err := Open(10, time.Minute, []string{
 		"127.0.0.1:3005"},
 		nil)
 
 	if err != nil {
-		t.Fail()
+		t.Fatal(err)
 	}
+	defer nm.Close(1, time.Minute)
 
-	defer nm.Close()
-
-	if len(nm.nodes.m) != 1 {
+	if len(nm.servers.m) != 1 {
 		t.FailNow()
 	}
 
-	for _, v := range nm.nodes.m {
+	for _, v := range nm.servers.m {
 		if v.fails != 1 {
-			t.Fail()
+			t.Fatal()
 		}
 	}
 }
 
 func TestCommandId(t *testing.T) {
-	nm, err := Open(addresses, nil)
-
+	nm, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
-		t.Fail()
+		t.Fatal(err)
 	}
+	defer nm.Close(1, time.Minute)
 
-	defer nm.Close()
-
-	nodeID := nm.nextCommandID.nodeID
+	serverID := nm.nextCommandID.serverID
 	connectionID := nm.nextCommandID.connectionID
 	requestID := nm.nextCommandID.requestID
 
-	nextCommandID := nm.commandID()
+	nextCommandId := nm.commandID()
 
-	if !(nextCommandID.nodeID == nodeID && nextCommandID.connectionID == connectionID && nextCommandID.requestID == requestID+1) {
-		t.Fail()
+	if !(nextCommandId.serverID == serverID && nextCommandId.connectionID == connectionID && nextCommandId.requestID == requestID+1) {
+		t.Fatal()
 	}
 }
 
 // normal operation
-func TestConnectOptions1(t *testing.T) {
+func TestConnect1(t *testing.T) {
 	netmutex := &NetMutex{
-		ttl:             DefaultTTL,
-		timeout:         DefaultTimeout,
-		retries:         DefaultRetries,
-		readBufferSize:  DefaultReadBufferSize,
-		writeBufferSize: DefaultWriteBufferSize,
-		done:            make(chan struct{}),
-		responses:       make(chan *response),
+		//		ttl:             DefaultTTL,
+		//		timeout:         DefaultTimeout,
+		//		retries:         DefaultRetries,
+		//		readBufferSize:  DefaultReadBufferSize,
+		//		writeBufferSize: DefaultWriteBufferSize,
+		done: make(chan struct{}),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*command),
 		},
 	}
 
-	options, err := netmutex.connectOptions("127.0.0.1:3001")
+	options, err := netmutex.connect("127.0.0.1:3001", time.Minute, "")
 
 	if err != nil {
-		t.FailNow()
+		t.Fatal(err)
 	}
 
-	if options.code != OPTIONS {
-		t.Error("bad code received")
+	if options.code != code.OPTIONS {
+		t.Fatal("bad code received")
 	}
-
-	if len(options.nodes) != 3 {
-		t.Error("wrong number of nodes: want 3 got ", len(options.nodes))
+	if len(options.servers) != 3 {
+		t.Fatal("wrong number of servers: want 3 got ", len(options.servers), options.servers)
 	}
 }
 
-// соединиться с несуществующей нодой
-func TestConnectOptions2(t *testing.T) {
+// соединиться с несуществующим сервером
+func TestConnect2(t *testing.T) {
 	netmutex := &NetMutex{
-		ttl:             DefaultTTL,
-		timeout:         DefaultTimeout,
-		retries:         DefaultRetries,
-		readBufferSize:  DefaultReadBufferSize,
-		writeBufferSize: DefaultWriteBufferSize,
-		done:            make(chan struct{}),
-		responses:       make(chan *response),
+		//		ttl:             DefaultTTL,
+		//		timeout:         DefaultTimeout,
+		//		retries:         DefaultRetries,
+		//		readBufferSize:  DefaultReadBufferSize,
+		//		writeBufferSize: DefaultWriteBufferSize,
+		done: make(chan struct{}),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*command),
 		},
 	}
 
-	_, err := netmutex.connectOptions("127.0.0.1:3004")
+	_, err := netmutex.connect("127.0.0.1:3004", time.Second, "")
+
+	fmt.Println(err)
 	if err == nil {
-		t.Error("must've been an error")
+		t.Fatal("must've been an error")
 	}
 }
 
 // Lock/Unlock
 func TestLock1(t *testing.T) {
-	nm, err := Open(addresses, nil)
+	nm, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
-		t.Fail()
+		t.Fatal(err)
 	}
+	defer nm.Close(1, time.Minute)
 
-	defer nm.Close()
+	retries := 10
+	timeout := time.Minute
+	ttl := time.Second
 
-	lock, err := nm.Lock("test")
-	if err != nil {
-		t.Fatal("can't lock", err)
-	}
+	key := "test"
 
-	err = nm.Unlock(lock)
-	if err != nil {
-		t.Fatal("can't unlock", err)
+	for i := 1000; i > 0; i-- {
+		lock, err := nm.Lock(retries, timeout, key, ttl)
+
+		if err != nil {
+			t.Fatal("can't lock", err)
+		}
+
+		err = nm.Unlock(retries, timeout, lock)
+
+		if err != nil {
+			t.Fatal("can't unlock", err)
+		}
 	}
 }
 
 // long key
 func TestLock2(t *testing.T) {
-	nm, err := Open(addresses, nil)
+	nm, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
-		t.Fail()
+		t.Fatal(err)
 	}
+	defer nm.Close(1, time.Minute)
 
-	defer nm.Close()
+	retries := 10
+	timeout := time.Minute
+	ttl := time.Second
 
-	badKey := strings.Repeat("a", 300)
+	bad_key := strings.Repeat("a", 300)
 
-	_, err = nm.Lock(badKey)
+	_, err = nm.Lock(retries, timeout, bad_key, ttl)
+
 	if err == nil {
 		t.Fatal("must be error")
 	}
@@ -212,48 +220,279 @@ func TestLock2(t *testing.T) {
 	}
 }
 
-func BenchmarkLock(b *testing.B) {
+// делает кучу аллокаций
+//func BenchmarkLock(b *testing.B) {
+//
+//	locker, err := Open(10,time.Second,addresses, nil)
+//	if err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	defer locker.Close()
+//
+//	b.ResetTimer()
+//
+//	retries := 10
+//	timeout := time.Minute
+//	ttl := time.Second
+//
+//	key := "a"
+//	for n := 0; n < b.N; n++ {
+//		locker.Lock(retries, timeout, key, ttl)
+//	}
+//}
 
-	locker, err := Open(addresses, nil)
+// On FreeBSD 11.0:
+// BenchmarkUDPWrite-4  3000000  4158 ns/op  33.66 MB/s  0 B/op  0 allocs/op
+//
+// On Ubuntu 16.10:
+// BenchmarkUDPWrite-4  2000000  7919 ns/op  17.68 MB/s  0 B/op  0 allocs/op
+func aBenchmarkUDPWrite(b *testing.B) {
+
+	size := 140
+
+	udpLocalAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
 	if err != nil {
-		log.Fatal(err)
+		b.Fatal("ResolveUDPAddr failed:", err)
 	}
 
-	defer locker.Close()
+	l, err := net.ListenUDP("udp", udpLocalAddr)
+	if err != nil {
+		b.Fatal("ListenUDP failed:", err)
+	}
+	defer l.Close()
 
+	sender, err := net.DialUDP("udp", nil, udpLocalAddr)
+	if err != nil {
+		b.Fatal("DialUDP failed:", err)
+	}
+
+	msg := make([]byte, size)
+
+	b.SetBytes(int64(size))
 	b.ResetTimer()
 
-	key := "a"
-	for n := 0; n < b.N; n++ {
-		locker.Lock(key)
-	}
-}
-func BenchmarkLockUnlock(b *testing.B) {
-
-	locker, err := Open(addresses, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer locker.Close()
-
-	b.ResetTimer()
-
-	key := "a"
-	for n := 0; n < b.N; n++ {
-		lock, _ := locker.Lock(key)
-		if lock != nil {
-			locker.Unlock(lock)
+	for i := 0; i < b.N; i++ {
+		n, err := sender.Write(msg)
+		if err != nil {
+			b.Fatal("Write failed", err)
 		}
+		if n != len(msg) {
+			b.Fatalf("Write failed: n=%v (want=%v)", n, len(msg))
+		}
+
 	}
 }
 
-//
-// mock nodes code
-//
-func mockStartNode(nodeID uint64, moskNodes map[uint64]string, mockPongFunc callback) (chan bool, error) {
+// On FreeBSD 11.0:
+//BenchmarkUDP/WriteMany1x140-4    3000000   6057 ns/op   23.11 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers1x140-4   2000000   6238 ns/op   22.44 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig1x140-4  3000000   4708 ns/op   29.73 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany10x140-4    300000  45410 ns/op   30.83 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers10x140-4  2000000   8215 ns/op  170.41 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig10x140-4 2000000   6098 ns/op  229.56 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany20x140-4    200000  89042 ns/op   31.45 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers20x140-4  1000000  10675 ns/op  262.27 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig20x140-4 2000000   7736 ns/op  361.91 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany30x140-4    100000 136303 ns/op   30.81 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers30x140-4  1000000  13641 ns/op  307.89 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig30x140-4 1000000  11616 ns/op  361.56 MB/s   0 B/op  0 allocs/op
 
-	addr, err := net.ResolveUDPAddr("udp", moskNodes[nodeID])
+//On Ubuntu 16.10:
+//BenchmarkUDP/WriteMany1x140-4    2000000   7202 ns/op   19.44 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers1x140-4   2000000   9375 ns/op   14.93 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig1x140-4  2000000   7530 ns/op   18.59 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany10x140-4    200000  80140 ns/op   17.47 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers10x140-4  1000000  11054 ns/op  126.64 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig10x140-4 2000000   9860 ns/op  141.99 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany20x140-4    100000  40516 ns/op   19.93 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers20x140-4  1000000  14152 ns/op  197.84 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig20x140-4 1000000  11539 ns/op  242.64 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/WriteMany30x140-4    100000 222907 ns/op   18.84 MB/s   0 B/op  0 allocs/op
+//BenchmarkUDP/NetBuffers30x140-4  1000000  15546 ns/op  270.16 MB/s  32 B/op  1 allocs/op
+//BenchmarkUDP/WriteOneBig30x140-4 1000000  12518 ns/op  335.50 MB/s   0 B/op  0 allocs/op
+
+func aBenchmarkUDP(mb *testing.B) {
+
+	size := 140
+	benchmarks := []int{1, 10, 20, 30}
+
+	udpLocalAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:12345")
+	if err != nil {
+		mb.Fatal("ResolveUDPAddr failed:", err)
+	}
+
+	l, err := net.ListenUDP("udp", udpLocalAddr)
+	if err != nil {
+		mb.Fatal("ListenUDP failed:", err)
+	}
+	defer l.Close()
+
+	sender, err := net.DialUDP("udp", nil, udpLocalAddr)
+	if err != nil {
+		mb.Fatal("DialUDP failed:", err)
+	}
+
+	for _, bm := range benchmarks {
+		benchmarkName := fmt.Sprint(bm)
+
+		msg := make([]byte, size)
+
+		mb.Run(fmt.Sprintf("WriteMany%vx%v", benchmarkName, size),
+			func(b *testing.B) {
+
+				b.SetBytes(int64(size * bm))
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					for i := 0; i < bm; i++ {
+						n, err := sender.Write(msg)
+						if err != nil {
+							b.Fatal("Write failed", err)
+						}
+						if n != len(msg) {
+							b.Fatalf("Write failed: n=%v (want=%v)", n, len(msg))
+						}
+					}
+				}
+			})
+
+		mb.Run(fmt.Sprintf("NetBuffers%vx%v", benchmarkName, size),
+			func(b *testing.B) {
+
+				nb0 := make(net.Buffers, bm)
+				nb := net.Buffers{}
+
+				b.SetBytes(int64(size * bm))
+				b.ResetTimer()
+
+				for n := 0; n < b.N; n++ {
+					nb = nb0
+					for i := 0; i < bm; i++ {
+						nb[i] = msg
+					}
+
+					n, err := nb.WriteTo(sender)
+					if err != nil {
+						b.Fatal("Write failed", err)
+					}
+					if n != int64(len(msg)*bm) {
+						b.Fatalf("Write failed: n=%v (want=%v)", n, len(msg)*bm)
+					}
+				}
+			})
+
+		mb.Run(fmt.Sprintf("WriteOneBig%vx%v", benchmarkName, size),
+			func(b *testing.B) {
+
+				bb := make([]byte, 0, size*bm)
+
+				b.SetBytes(int64(size * bm))
+				b.ResetTimer()
+
+				for n := 0; n < b.N; n++ {
+					for i := 0; i < bm; i++ {
+						bb = append(bb, msg...)
+					}
+
+					n, err := sender.Write(bb)
+					if err != nil {
+						b.Fatal("Write failed", err)
+					}
+					if n != len(msg)*bm {
+						b.Fatalf("Write failed: n=%v (want=%v)", n, len(msg)*bm)
+					}
+					bb = bb[:0]
+				}
+			})
+	}
+}
+
+func BenchmarkMain(mb *testing.B) {
+
+	locker, err := Open(10, time.Minute, addresses, nil)
+	if err != nil {
+		mb.Fatal(err)
+	}
+	defer locker.Close(1, time.Minute)
+
+	retries := 10
+	timeout := time.Minute
+	ttl := time.Second
+	key := "a"
+
+	mb.Run("LockUnlock",
+		func(b *testing.B) {
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				lock, _ := locker.Lock(retries, timeout, key, ttl)
+
+				if lock != nil {
+					locker.Unlock(retries, timeout, lock)
+				}
+			}
+		})
+
+	mb.Run("LockUpdateUnlock",
+		func(b *testing.B) {
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				lock, _ := locker.Lock(retries, timeout, key, ttl)
+
+				for i := 0; i < 8; i++ {
+					locker.Update(retries, timeout, lock, ttl)
+				}
+
+				if lock != nil {
+					locker.Unlock(retries, timeout, lock)
+				}
+			}
+		})
+}
+
+func BenchmarkParallel(b *testing.B) {
+
+	locker, err := Open(10, time.Minute, addresses, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer locker.Close(1, time.Minute)
+
+	b.SetParallelism(10)
+	//b.SetBytes(10) // это не байты, а количество запросов к серверу: 1 лок, 1 анлок и 8 апдейтов. итого: 10
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+
+		retries := 10
+		timeout := time.Minute
+		ttl := time.Second
+		key := "a"
+		i := 0
+
+		for pb.Next() {
+			i++
+
+			lock, _ := locker.Lock(retries, timeout, fmt.Sprint(key, "_", i), ttl)
+
+			for i := 0; i < 8; i++ {
+				locker.Update(retries, timeout, lock, ttl)
+			}
+
+			if lock != nil {
+				locker.Unlock(retries, timeout, lock)
+			}
+		}
+	})
+}
+
+//
+// mock servers code
+//
+func mockStartServer(serverID uint64, moskServers map[uint64]string, pongFunc callback) (chan bool, error) {
+
+	addr, err := net.ResolveUDPAddr("udp", moskServers[serverID])
 	if err != nil {
 		return nil, err
 	}
@@ -265,17 +504,20 @@ func mockStartNode(nodeID uint64, moskNodes map[uint64]string, mockPongFunc call
 
 	done := make(chan bool)
 
-	go mockRun(conn, nodeID, moskNodes, done, mockPongFunc)
+	go mockRun(conn, serverID, moskServers, done, pongFunc)
 
 	return done, nil
 }
 
-func mockStopNode(done chan bool) {
+func mockStopServer(done chan bool) {
 	close(done)
 	time.Sleep(200 * time.Millisecond) // ждём, пока закончится цикл в mock_run()
 }
 
-func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done chan bool, mockPongFunc callback) {
+func mockRun(conn *net.UDPConn, serverID uint64, moskServers map[uint64]string, done chan bool, pongFunc callback) {
+
+	var lastReadDeadlineTime time.Time
+
 	for {
 		// выходим из цикла, если надо закончить свою работу
 		select {
@@ -285,93 +527,155 @@ func mockRun(conn *net.UDPConn, nodeID uint64, moskNodes map[uint64]string, done
 		default:
 		}
 
-		b := acquireByteBuffer()
+		b := getByteBuffer()
 
 		// deadline нужен чтобы можно было выйти из цикла и завершить работу
-		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		// Optimization: see https://github.com/golang/go/issues/15133 for details.
+		currentTime := time.Now()
+		if currentTime.Sub(lastReadDeadlineTime) > 59*time.Second {
+			lastReadDeadlineTime = currentTime
+			err := conn.SetReadDeadline(currentTime.Add(time.Minute))
+			if err != nil {
+				warn(err)
+			}
+		}
 
-		_, addr, err := conn.ReadFromUDP(b.buf)
+		//// deadline нужен чтобы можно было выйти из цикла и завершить работу
+		//conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+
+		n, addr, err := conn.ReadFromUDP(b.buf)
 		if err != nil {
 			// если произошёл не таймаут, а что-то другое
 			if neterr, ok := err.(*net.OpError); !ok || !neterr.Timeout() {
 				warn(err)
 			}
+			putByteBuffer(b)
 			continue
 		}
 
-		switch b.buf[3] {
-		case CONNECT:
-			go mockOnConnect(conn, addr, b, nodeID, moskNodes)
+		go mockProccessReq(b, n, serverID, moskServers, conn, addr, pongFunc)
+	}
+}
 
-		case LOCK, UNLOCK:
-			go mockOnLockUnlock(conn, addr, b)
+func mockProccessReq(b *byteBuffer, n int, serverID uint64, moskServers map[uint64]string, conn *net.UDPConn, addr *net.UDPAddr, pongFunc callback) {
+	defer putByteBuffer(b)
 
-		case PING:
-			go mockPongFunc(conn, addr, b)
+	pos := 0
+	for pos < n {
+		pos += protocolHeaderSize
+		switch b.buf[pos+0] {
+		case code.CONNECT:
+			mockOnConnect(conn, addr, serverID, moskServers)
+			pos += 1 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+3:])) + 24
+
+		case code.PING:
+			pongFunc(conn, addr, b.buf[pos:])
+			pos += 25 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+25:]))
+
+		case code.TOUCH:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 25
+
+		case code.DISCONNECT:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 25
+
+		case code.LOCK:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 42 + int(b.buf[pos+41]) + 24
+
+		case code.UNLOCK:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 58 + int(b.buf[pos+57])
+
+		case code.UPDATE:
+			mockOk(conn, addr, b.buf[pos:])
+			pos += 66 + int(b.buf[pos+65]) + 24
 
 		default:
-			warn("Wrong command", fmt.Sprint(b.buf[3]), "from", addr, conn.LocalAddr(), conn.RemoteAddr())
-			releaseByteBuffer(b)
+			warn("Wrong command", fmt.Sprint(b.buf[pos+0]), pos, n, b.buf)
+			return
 		}
+		pos += protocolTailSize
 	}
 }
 
-func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer, nodeID uint64, moskNodes map[uint64]string) {
-	defer releaseByteBuffer(b)
-	b.buf[3] = OPTIONS
+func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, serverID uint64, moskServers map[uint64]string) {
+	b := getByteBuffer()
+	defer putByteBuffer(b)
 
-	binary.LittleEndian.PutUint64(b.buf[8:], nodeID)
-	binary.LittleEndian.PutUint64(b.buf[16:], 1)
-	binary.LittleEndian.PutUint64(b.buf[24:], 0)
+	// записываем версию
+	b.buf[0] = 1
 
-	nodesPos := 32
-	b.buf[nodesPos] = byte(len(moskNodes))
-	nodesPos++
-	for nodeID, nodeString := range moskNodes {
-		// id ноды
-		binary.LittleEndian.PutUint64(b.buf[nodesPos:], nodeID)
-		nodesPos += 8
+	// записываем приоритет
+	b.buf[1] = 128 // выше среднего
 
-		// длина адреса ноды
-		b.buf[nodesPos] = byte(len(nodeString))
-		nodesPos++
+	// записываем код команды
+	b.buf[2] = 0 // одиночный пакет
 
-		// адрес ноды
-		copy(b.buf[nodesPos:], nodeString)
-		nodesPos += len(nodeString)
+	b.buf[protocolHeaderSize+0] = code.OPTIONS
+
+	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+1:], serverID)
+	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+9:], 1)
+
+	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+17:], uint64(len(moskServers)))
+
+	serversPos := protocolHeaderSize + 25
+	for serverID, serverString := range moskServers {
+		// id сервера
+		binary.LittleEndian.PutUint64(b.buf[serversPos:], serverID)
+		serversPos += 8
+
+		// длина адреса сервера
+		b.buf[serversPos] = byte(len(serverString))
+		serversPos++
+
+		// адрес сервера
+		copy(b.buf[serversPos:], serverString)
+		serversPos += len(serverString)
 	}
 
-	_, err := conn.WriteToUDP(b.buf, addr)
+	// записываем длину
+	binary.LittleEndian.PutUint64(b.buf[8:], uint64(serversPos+protocolTailSize))
+
+	// записываем контрольную сумму
+	chsum := checksum.Checksum(b.buf[:serversPos])
+	copy(b.buf[serversPos:], chsum[:])
+
+	serversPos += protocolTailSize
+
+	_, err := conn.WriteToUDP(b.buf[:serversPos], addr)
 	if err != nil {
 		warn(err)
 	}
 
 }
 
-func mockOnLockUnlock(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
-	defer releaseByteBuffer(b)
+func mockOk(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
+	b := getByteBuffer()
+	defer putByteBuffer(b)
 
-	// Код ответа
-	b.buf[3] = OK
+	// записываем версию
+	b.buf[0] = 1
 
-	// выставляем длину пакета
-	binary.LittleEndian.PutUint16(b.buf[1:], 32)
+	// записываем приоритет
+	b.buf[1] = 128 // выше среднего
 
-	// ждём некоторое время
-	//time.Sleep(time.Duration(rand.Intn(110)) * time.Millisecond)
+	// записываем код команды
+	b.buf[2] = 0 // одиночный пакет
 
-	_, err := conn.WriteToUDP(b.buf[:32], addr)
-	if err != nil {
-		warn(err)
-	}
-}
+	b.buf[32] = code.OK
 
-func mockOnPing(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
-	defer releaseByteBuffer(b)
+	copy(b.buf[33:], reqB[1:25])
 
-	b.buf[3] = PONG
+	// записываем длину
+	binary.LittleEndian.PutUint64(b.buf[8:], uint64(protocolHeaderSize+25+protocolTailSize))
 
-	_, err := conn.WriteToUDP(b.buf, addr)
+	// записываем контрольную сумму
+	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+25])
+	copy(b.buf[protocolHeaderSize+25:], chsum[:])
+
+	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+25+protocolTailSize], addr)
 	if err != nil {
 		warn(err)
 	}
@@ -379,28 +683,54 @@ func mockOnPing(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
 
 // ошибочный пинг-понг - не понгает в ответ на пинг
 // нужно для тестирования правильности отработки коннекта
-func mockOnPingBad(conn *net.UDPConn, addr *net.UDPAddr, b *byteBuffer) {
-	defer releaseByteBuffer(b)
+func mockLocked(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
+	b := getByteBuffer()
+	defer putByteBuffer(b)
 
-	b.buf[3] = TIMEOUT
+	// записываем версию
+	b.buf[0] = 1
 
-	_, err := conn.WriteToUDP(b.buf, addr)
+	// записываем приоритет
+	b.buf[1] = 128 // выше среднего
+
+	// записываем код команды
+	b.buf[2] = 0 // одиночный пакет
+
+	b.buf[32] = code.LOCKED
+
+	copy(b.buf[33:], reqB[1:25])
+
+	// записываем длину
+	binary.LittleEndian.PutUint64(b.buf[8:], uint64(protocolHeaderSize+25+protocolTailSize))
+
+	// записываем контрольную сумму
+	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+25])
+	copy(b.buf[protocolHeaderSize+25:], chsum[:])
+
+	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+25+protocolTailSize], addr)
 	if err != nil {
 		warn(err)
 	}
 }
 
-func warn(a ...interface{}) {
-	fmt.Fprintln(os.Stderr, a)
-}
-
 // Keep this lines at the end of file
 
-// go test -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." netmutex -x
+// go test -v -run=none -benchmem -benchtime="10s" -bench="."
+
+// go test -v -run=none -memprofile mem.out -memprofilerate=1 -benchmem -benchtime="10s" -bench="." github.com/MichaelMonashev/sync/netmutex -x
+// --alloc_space, --alloc_objects, --show_bytes
 // go tool pprof --alloc_objects netmutex.test.exe mem.out
 
-// go test -cpuprofile cpu.out -benchmem -benchtime="10s" -bench="." netmutex -x
+// go test -v -run=none --blockprofile block.out -benchtime="10s" -benchmem -bench="." github.com/MichaelMonashev/sync/netmutex -x
+// go tool pprof --lines netmutex.test.exe block.out
+
+// go test -v -run=none -cpuprofile cpu.out -benchtime="10s" -benchmem -bench="." github.com/MichaelMonashev/sync/netmutex -x
 // go tool pprof netmutex.test.exe cpu.out
+
+// go test -v -run=none -mutexprofile mutex.out -benchtime="10s" -benchmem -bench="." github.com/MichaelMonashev/sync/netmutex -x
+// go tool pprof netmutex.test.exe mutex.out
 
 // go test -cover -covermode=count -coverprofile=count.out
 // go tool cover -html=count.out
+
+// go tool pprof -seconds=1 main.exe http://127.0.0.1:8000/debug/pprof/profile
