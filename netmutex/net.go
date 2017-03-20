@@ -20,7 +20,7 @@ func openConn(addr string) (*net.UDPConn, error) {
 	return net.DialUDP("udp", nil, serverAddr)
 }
 
-func write(s *server, command *command) error {
+func write(s *server, req *request) error {
 	// если сервер перегружен, то перед отправкой запроса сделаем небольшую паузу пропорционально его нагруженности
 	serverBusy := atomic.LoadInt32(&s.busy)
 	if serverBusy > 0 {
@@ -31,7 +31,7 @@ func write(s *server, command *command) error {
 	b := getByteBuffer()
 	defer putByteBuffer(b)
 
-	n, err := command.marshalPacket(b.buf, s.frameID, s.getSeqID())
+	n, err := req.marshalPacket(b.buf, s.frameID, s.getSeqID())
 	if err != nil {
 		return err
 	}

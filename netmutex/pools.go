@@ -50,12 +50,12 @@ func putByteBuffer(b *byteBuffer) {
 //----------------------------------------------
 var commandPool sync.Pool
 
-func getCommand() *command {
-	c := commandPool.Get()
-	if c == nil {
+func getRequest() *request {
+	req := commandPool.Get()
+	if req == nil {
 		timer := time.NewTimer(time.Hour) // ??? как иначе создать таймер с каналом C != nil?
 		timer.Stop()
-		return &command{
+		return &request{
 			respChan:    make(chan error),
 			sendChan:    make(chan *server, 2),
 			processChan: make(chan *response),
@@ -64,13 +64,13 @@ func getCommand() *command {
 			//retries:     0,
 		}
 	}
-	return c.(*command)
+	return req.(*request)
 }
 
-func putCommand(c *command) {
-	nilCheck(c)
+func putRequest(req *request) {
+	nilCheck(req)
 
-	commandPool.Put(c)
+	commandPool.Put(req)
 }
 
 //----------------------------------------------

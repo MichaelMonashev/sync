@@ -17,7 +17,7 @@ const (
 var zeroBuf = make([]byte, 24)
 var zeroBuf400 = make([]byte, 400)
 
-type command struct {
+type request struct {
 	id            commandID      // номер команды
 	key           string         // ключ
 	timeout       time.Duration  // за какое время надо попытаться выполнить команду
@@ -42,9 +42,9 @@ type commandID struct {
 	requestID    uint64
 }
 
-func (command *command) marshalPacket(buf []byte, connID []byte, seqID uint64) (int, error) {
+func (req *request) marshalPacket(buf []byte, connID []byte, seqID uint64) (int, error) {
 
-	n, err := command.marshalCommand(buf[protocolHeaderSize:])
+	n, err := req.marshalCommand(buf[protocolHeaderSize:])
 	if err != nil {
 		return 0, err
 	}
@@ -84,7 +84,7 @@ func addHeaderAndTail(buf []byte, n int, connID []byte, seqID uint64) {
 	copy(buf[protocolHeaderSize+n:], chsum[:])
 }
 
-func (req *command) marshalCommand(buf []byte) (int, error) {
+func (req *request) marshalCommand(buf []byte) (int, error) {
 
 	var bufSize int
 
@@ -234,77 +234,77 @@ func (req *command) marshalCommand(buf []byte) (int, error) {
 		bufSize = 25
 
 	default:
-		return 0, errorln("Wrong command code:", req.code, ".")
+		return 0, errorln("Wrong req code:", req.code, ".")
 	}
 
 	return bufSize, nil
 }
 
-func (command *command) isEnoughRetries() bool {
-	command.retries--
-	return command.retries <= 0
+func (req *request) isEnoughRetries() bool {
+	req.retries--
+	return req.retries <= 0
 }
 
-func (command *command) run() {
-	command.send(nil)
+func (req *request) run() {
+	req.send(nil)
 
 	for {
 		select {
-		case <-command.netmutex.done:
+		case <-req.netmutex.done:
 			return
 
-		case server := <-command.sendChan:
-			command.send(server)
+		case server := <-req.sendChan:
+			req.send(server)
 
-		case <-command.timer.C:
-			if command.onTimeout() {
+		case <-req.timer.C:
+			if req.onTimeout() {
 				return
 			}
 
-		case <-command.done:
+		case <-req.done:
 			return
 
-		case resp := <-command.processChan:
-			if command.process(resp) {
+		case resp := <-req.processChan:
+			if req.process(resp) {
 				return
 			}
 		}
 	}
 }
 
-func (command *command) send(server *server) {
+func (req *request) send(server *server) {
 
 	var err error
 
 	for {
 		if server == nil {
-			server, err = command.netmutex.server()
+			server, err = req.netmutex.server()
 			if err != nil { // некуда отправлять команду, поэтому сразу возвращаем ошибку
-				command.done <- struct{}{}
-				command.respChan <- err
+				req.done <- struct{}{}
+				req.respChan <- err
 				return
 			}
 		}
 
-		command.currentServer = server
+		req.currentServer = server
 
-		command.timer.Reset(command.timeout)
+		req.timer.Reset(req.timeout)
 
-		//err = writeBuffered(server, command)
-		err = write(server, command)
+		//err = writeBuffered(server, req)
+		err = write(server, req)
 		if err == nil { // если нет ошибки, то выходим из функции и ждём прихода ответа или срабатывания таймера
 			return
 		}
 
-		command.timer.Stop()
+		req.timer.Stop()
 
 		// если ошибка в том, что длина ключа слишком велика, то помечать сервер плохим не нужно
 		if err != ErrLongKey {
-			command.currentServer.fail()
+			req.currentServer.fail()
 		}
 
-		if command.isEnoughRetries() {
-			command.respChan <- ErrTooMuchRetries
+		if req.isEnoughRetries() {
+			req.respChan <- ErrTooMuchRetries
 			return
 		}
 
@@ -313,67 +313,67 @@ func (command *command) send(server *server) {
 }
 
 // функция, вызывается, когда истёт таймаут на приход ответа от сервера
-func (command *command) onTimeout() bool {
-	command.currentServer.fail()
+func (req *request) onTimeout() bool {
+	req.currentServer.fail()
 
-	if command.isEnoughRetries() {
-		command.respChan <- ErrTooMuchRetries
+	if req.isEnoughRetries() {
+		req.respChan <- ErrTooMuchRetries
 	} else {
-		command.sendChan <- nil
+		req.sendChan <- nil
 		return false
 	}
 	return true
 }
 
-func (command *command) process(resp *response) bool {
-	command.timer.Stop()
+func (req *request) process(resp *response) bool {
+	req.timer.Stop()
 
 	switch resp.code {
 	case code.OK:
-		command.currentServer.ok()
-		command.respChan <- nil
+		req.currentServer.ok()
+		req.respChan <- nil
 
 	case code.DISCONNECTED:
-		command.currentServer.ok()
-		command.respChan <- ErrDisconnected
+		req.currentServer.ok()
+		req.respChan <- ErrDisconnected
 
 	case code.ISOLATED:
-		command.currentServer.ok()
-		command.respChan <- ErrIsolated
+		req.currentServer.ok()
+		req.respChan <- ErrIsolated
 
 	case code.LOCKED:
-		command.currentServer.ok()
-		command.respChan <- ErrLocked
+		req.currentServer.ok()
+		req.respChan <- ErrLocked
 
 	case code.REDIRECT:
-		command.currentServer.ok()
-		if command.isEnoughRetries() {
-			command.respChan <- ErrTooMuchRetries
+		req.currentServer.ok()
+		if req.isEnoughRetries() {
+			req.respChan <- ErrTooMuchRetries
 		} else {
-			command.sendChan <- command.netmutex.serverByID(resp.serverID)
+			req.sendChan <- req.netmutex.serverByID(resp.serverID)
 			return false
 		}
 
 	case code.ERROR:
-		command.currentServer.ok()
-		command.respChan <- errors.New(resp.description)
+		req.currentServer.ok()
+		req.respChan <- errors.New(resp.description)
 
 		// Важно!!!
 		// Большая нагрузка на сервер должна обрабатываться не здесь и не так.
 		// BUSY - команда транспортного уровня
 		// Она должна приводить к паузе, а не к смене сервера
 		//	case BUSY:
-		//		command.currentServer.fail()
+		//		req.currentServer.fail()
 		//
-		//		if command.isEnoughRetries() {
-		//			command.respChan <- ErrBusy
+		//		if req.isEnoughRetries() {
+		//			req.respChan <- ErrBusy
 		//		} else { // повторяем запрос к загруженному серверу
-		//			command.sendChan <- command.currentServer
+		//			req.sendChan <- req.currentServer
 		//			return false
 		//		}
 
 	default:
-		command.respChan <- errWrongResponse
+		req.respChan <- errWrongResponse
 	}
 
 	putResponse(resp)

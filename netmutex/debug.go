@@ -9,39 +9,39 @@ import (
 	"github.com/MichaelMonashev/sync/netmutex/code"
 )
 
-func (c command) String() string {
-	switch c.code {
+func (req request) String() string {
+	switch req.code {
 	case code.LOCK:
-		return fmt.Sprintf("LOCK %v %v %v", c.key, c.id, c.ttl)
+		return fmt.Sprintf("LOCK %v %v %v", req.key, req.id, req.ttl)
 	case code.UPDATE:
-		return fmt.Sprintf("UPDATE %v %v %v %v", c.key, c.id, c.lockID, c.ttl)
+		return fmt.Sprintf("UPDATE %v %v %v %v", req.key, req.id, req.lockID, req.ttl)
 	case code.UNLOCK:
-		return fmt.Sprintf("UNLOCK %v %v %v", c.key, c.id, c.lockID)
+		return fmt.Sprintf("UNLOCK %v %v %v", req.key, req.id, req.lockID)
 	case code.UNLOCKALL:
-		return fmt.Sprintf("UNLOCKALL %v", c.id)
+		return fmt.Sprintf("UNLOCKALL %v", req.id)
 	case code.PING:
-		return fmt.Sprintf("PING %v", c.id)
+		return fmt.Sprintf("PING %v", req.id)
 	case code.CONNECT:
 		return "CONNECT"
 	default:
-		return fmt.Sprintf("UNKNOWN command: %v", fmt.Sprint(c.code))
+		return fmt.Sprintf("UNKNOWN command: %v", fmt.Sprint(req.code))
 	}
 }
 
-func (r response) String() string {
-	switch r.code {
+func (resp response) String() string {
+	switch resp.code {
 	case code.OK:
-		return fmt.Sprintf("OK %v", r.id)
+		return fmt.Sprintf("OK %v", resp.id)
 	case code.REDIRECT:
-		return fmt.Sprintf("REDIRECT %v to %v", r.id, r.serverID)
+		return fmt.Sprintf("REDIRECT %v to %v", resp.id, resp.serverID)
 	case code.LOCKED:
-		return fmt.Sprintf("LOCKED %v", r.id)
+		return fmt.Sprintf("LOCKED %v", resp.id)
 	case code.ERROR:
-		return fmt.Sprintf("ERROR %v %v", r.id, r.description)
+		return fmt.Sprintf("ERROR %v %v", resp.id, resp.description)
 	case code.OPTIONS:
-		return fmt.Sprintf("OPTIONS %v %v", r.id, r.servers)
+		return fmt.Sprintf("OPTIONS %v %v", resp.id, resp.servers)
 	default:
-		return fmt.Sprintf("UNKNOWN command: %v", fmt.Sprint(r.code))
+		return fmt.Sprintf("UNKNOWN command: %v", fmt.Sprint(resp.code))
 	}
 }
 

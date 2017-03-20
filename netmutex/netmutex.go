@@ -85,7 +85,7 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 	nm := &NetMutex{
 		done: make(chan struct{}),
 		workingCommands: &workingCommands{
-			m: make(map[commandID]*command),
+			m: make(map[commandID]*request),
 		},
 	}
 
@@ -260,8 +260,8 @@ func (nm *NetMutex) Close(retries int, timeout time.Duration) error {
 
 func (nm *NetMutex) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
 
-	command := getCommand()
-	defer putCommand(command)
+	command := getRequest()
+	defer putRequest(command)
 
 	command.id = id
 	command.code = code
@@ -281,8 +281,8 @@ func (nm *NetMutex) runCommand(key string, id commandID, code byte, timeout time
 }
 
 func (nm *NetMutex) touch(s *server) {
-	command := getCommand()
-	defer putCommand(command)
+	command := getRequest()
+	defer putRequest(command)
 
 	command.id = nm.commandID()
 	command.code = code.TOUCH
@@ -299,7 +299,7 @@ func (nm *NetMutex) touch(s *server) {
 
 		write(s, command) // ответ именно для этого command.id нам не важен, так что не запускаем горутину, ждущую именно этот ответ.
 
-		time.Sleep(10 * time.Minute)
+		time.Sleep(10 * time.Minute) // ToDo Вынести в константы
 	}
 }
 
@@ -417,7 +417,7 @@ func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo st
 		frameID: frameID,
 	}
 
-	req := &command{
+	req := &request{
 		code:          code.CONNECT,
 		isolationInfo: isolationInfo,
 	}
@@ -439,7 +439,7 @@ func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo st
 }
 
 func (nm *NetMutex) ping(s *server, timeout time.Duration) error {
-	req := &command{
+	req := &request{
 		code: code.PING,
 		id:   nm.commandID(),
 	}

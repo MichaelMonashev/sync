@@ -127,7 +127,7 @@ func TestConnect1(t *testing.T) {
 		//		writeBufferSize: DefaultWriteBufferSize,
 		done: make(chan struct{}),
 		workingCommands: &workingCommands{
-			m: make(map[commandID]*command),
+			m: make(map[commandID]*request),
 		},
 	}
 
@@ -155,7 +155,7 @@ func TestConnect2(t *testing.T) {
 		//		writeBufferSize: DefaultWriteBufferSize,
 		done: make(chan struct{}),
 		workingCommands: &workingCommands{
-			m: make(map[commandID]*command),
+			m: make(map[commandID]*request),
 		},
 	}
 
@@ -247,7 +247,7 @@ func TestLock2(t *testing.T) {
 //
 // On Ubuntu 16.10:
 // BenchmarkUDPWrite-4  2000000  7919 ns/op  17.68 MB/s  0 B/op  0 allocs/op
-func aBenchmarkUDPWrite(b *testing.B) {
+func BenchmarkUDPWrite(b *testing.B) {
 
 	size := 140
 
@@ -312,7 +312,7 @@ func aBenchmarkUDPWrite(b *testing.B) {
 //BenchmarkUDP/NetBuffers30x140-4  1000000  15546 ns/op  270.16 MB/s  32 B/op  1 allocs/op
 //BenchmarkUDP/WriteOneBig30x140-4 1000000  12518 ns/op  335.50 MB/s   0 B/op  0 allocs/op
 
-func aBenchmarkUDP(mb *testing.B) {
+func BenchmarkUDP(mb *testing.B) {
 
 	size := 140
 	benchmarks := []int{1, 10, 20, 30}

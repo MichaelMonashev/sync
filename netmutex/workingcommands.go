@@ -6,22 +6,22 @@ import (
 
 type workingCommands struct {
 	sync.RWMutex
-	m map[commandID]*command
+	m map[commandID]*request
 }
 
-func (wc *workingCommands) add(command *command) {
+func (wc *workingCommands) add(req *request) {
 	wc.Lock()
 	defer wc.Unlock()
 
-	wc.m[command.id] = command
+	wc.m[req.id] = req
 }
 
-func (wc *workingCommands) get(commandID commandID) (*command, bool) {
+func (wc *workingCommands) get(commandID commandID) (*request, bool) {
 	wc.RLock()
 	defer wc.RUnlock()
 
-	command, ok := wc.m[commandID]
-	return command, ok
+	req, ok := wc.m[commandID]
+	return req, ok
 }
 
 func (wc *workingCommands) delete(commandID commandID) {
