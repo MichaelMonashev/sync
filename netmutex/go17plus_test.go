@@ -3,9 +3,8 @@
 package netmutex
 
 import (
-	"fmt"
-	"net"
 	"testing"
+	"time"
 )
 
 func BenchmarkMain(mb *testing.B) {
