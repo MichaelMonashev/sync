@@ -57,11 +57,12 @@ type Lock struct {
 	timeout   time.Duration
 }
 
+// String возвращает текстовое представление блокировки.
 func (l *Lock) String() string {
 	return l.key
 }
 
-// Options хранит дефолтные параметры.
+// Options задаёт дополнительные параметры соединения.
 type Options struct {
 	IsolationInfo string // Информация о том, как в случае неработоспособности будет изолироваться клиент.
 	//	TTL             time.Duration // Time to live - значение по-умолчанию времени жизни блокировки.
@@ -72,7 +73,7 @@ type Options struct {
 	//	WriteBufferSize int // Sets the size of the operating system's transmit buffer associated with connections.
 }
 
-// NetMutex - блокировка по сети
+// NetMutex реализует блокировки по сети
 type NetMutex struct {
 	nextCommandID commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	//	ttl             time.Duration // значение по умолчанию для Lock(), Unlock()
@@ -86,8 +87,8 @@ type NetMutex struct {
 	workingCommands *workingCommands
 }
 
-// Open пытается за время timeout соединиться с любым сервером из списка,
-// получить с него актуальный список серверов и задать параметры соединений.
+// Open пытается за время timeout соединиться с любым сервером из списка addrs,
+// получить с него актуальный список серверов, используя параметры options.
 // Если не получается, то повторяет обход retries раз.
 // Если получается, то пытается открыть соединение с каждым сервером из полученного списка серверов.
 func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutex, error) {
