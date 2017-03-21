@@ -57,7 +57,7 @@ All steps:
 
 Full code:
 
-package main
+	package main
 
 	import (
 		"fmt"
@@ -105,7 +105,7 @@ package main
 		}
 	}
 
-##Performance
+## Performance
 
 	$ cd $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 	$ go test -v -benchmem -benchtime="20s" -bench="."
