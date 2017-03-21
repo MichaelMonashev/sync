@@ -65,8 +65,8 @@ script:
 - go env
 - go build -v -work -x ./netmutex
 - if [ "${GIMME_ARCH}" = "amd64" ]; then go test -cpu=1,2 -v -race ./netmutex; else go test -cpu=1,2 -v ./netmutex; fi
-- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then go test -race -v -coverprofile=coverage.out -covermode=atomic ./netmutex; goveralls -coverprofile=coverage.out -service=travis-ci; cp coverage.out coverage.txt; fi
+- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then go test -race -v -coverprofile=coverage.out -covermode=atomic ./netmutex; goveralls -coverprofile=coverage.out -service=travis-ci; fi
 - go test -cpu=1,2 -v -run=none -benchmem -benchtime="5s" -bench="Benchmark." ./netmutex
 
 after_success:
-- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then bash <(curl -s https://codecov.io/bash) -t 92d3bdb3-3f81-489e-8565-8b2ef0af76eb; fi
+- if [ "${GIMME_ARCH}" = "amd64" ] && [ "${TRAVIS_OS_NAME}" = "linux" ] && [ "${TRAVIS_GO_VERSION}" = "1.8" ]; then bash <(curl -s https://codecov.io/bash) -v -t 92d3bdb3-3f81-489e-8565-8b2ef0af76eb; fi
