@@ -12,9 +12,11 @@ import (
 	"github.com/MichaelMonashev/sync/netmutex/code"
 )
 
+// Ограничения на размер передаваемых в команды данных.
 const (
 	// MaxKeySize - максимальная допустимая длина ключа.
 	MaxKeySize = 255
+
 	// MaxIsolationInfo - максимальная допустимая длина информации для изоляции клиента в случае его неработоспособности.
 	MaxIsolationInfo = 400
 )
@@ -23,18 +25,25 @@ const (
 var (
 	// Соединение было закрыто ранее.
 	ErrDisconnected = errors.New("Client connection had closed.")
-	// Ключ заблокирован кем-то другим.
+
+	// Клиент был изолирован.
 	ErrIsolated = errors.New("Client had isolated.")
+
 	// Ключ заблокирован кем-то другим.
 	ErrLocked = errors.New("Key locked.")
+
 	// Не удалось подключиться ни к одному серверу из списка или все они стали недоступны.
 	ErrNoServers = errors.New("No working servers.")
+
 	// Превышено количество попыток отправить команду на сервер.
 	ErrTooMuchRetries = errors.New("Too much retries.")
+
 	// Ключ длиннее MaxKeySize байт.
 	ErrLongKey = errors.New("Key too long.")
+
 	// TTL меньше нуля.
 	ErrWrongTTL = errors.New("Wrong TTL.")
+
 	// Информация для изоляции клиента длиннее MaxIsolationInfo байт.
 	ErrLongIsolationInfo = errors.New("Client isolation information too long.")
 )
