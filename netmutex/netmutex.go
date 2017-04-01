@@ -208,7 +208,7 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 //}
 
 // Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
-func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) (error) {
+func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) error {
 
 	if len(key) > MaxKeySize {
 		return ErrLongKey
