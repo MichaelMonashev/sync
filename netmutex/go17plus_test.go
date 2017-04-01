@@ -45,7 +45,7 @@ func BenchmarkMain(mb *testing.B) {
 				nm.Lock(retries, timeout, lock, key, ttl)
 
 				for i := 0; i < 8; i++ {
-					err = nm.Update(retries, timeout, lock, ttl)
+					nm.Update(retries, timeout, lock, ttl)
 				}
 
 				nm.Unlock(retries, timeout, lock)
