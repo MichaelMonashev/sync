@@ -3,6 +3,7 @@ package netmutex
 import (
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,7 +48,7 @@ func Example() error {
 		heartbeatTimeout := 6 * time.Second // much less than `ttl`
 		heartbeatRetries := 1
 
-		for atonic.LoadUint32(&done) == 0 {
+		for atomic.LoadUint32(&done) == 0 {
 			// Try to update lock TTL
 			err = nm.Update(heartbeatRetries, timeout, lock, ttl)
 			if err == ErrDisconnected || err == ErrWrongTTL || err == ErrNoServers {
@@ -68,7 +69,7 @@ func Example() error {
 	// do something...
 
 	// stop heartbeat
-	atonic.StoreUint32(&done, 1)
+	atomic.StoreUint32(&done, 1)
 
 	// Try to unlock lock
 	err = nm.Unlock(retries, timeout, lock)
