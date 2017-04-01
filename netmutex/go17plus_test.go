@@ -9,11 +9,11 @@ import (
 
 func BenchmarkMain(mb *testing.B) {
 
-	locker, err := Open(10, time.Minute, addresses, nil)
+	nm, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		mb.Fatal(err)
 	}
-	defer locker.Close(1, time.Minute)
+	defer nm.Close(1, time.Minute)
 
 	retries := 10
 	timeout := time.Minute
@@ -22,31 +22,33 @@ func BenchmarkMain(mb *testing.B) {
 
 	mb.Run("LockUnlock",
 		func(b *testing.B) {
+
+			lock := &Lock{}
+
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				lock, _ := locker.Lock(retries, timeout, key, ttl)
+				nm.Lock(retries, timeout, lock, key, ttl)
 
-				if lock != nil {
-					locker.Unlock(retries, timeout, lock)
-				}
+				nm.Unlock(retries, timeout, lock)
+
 			}
 		})
 
 	mb.Run("LockUpdateUnlock",
 		func(b *testing.B) {
+			lock := &Lock{}
+
 			b.ResetTimer()
 
 			for n := 0; n < b.N; n++ {
-				lock, _ := locker.Lock(retries, timeout, key, ttl)
+				nm.Lock(retries, timeout, lock, key, ttl)
 
 				for i := 0; i < 8; i++ {
-					locker.Update(retries, timeout, lock, ttl)
+					err = nm.Update(retries, timeout, lock, ttl)
 				}
 
-				if lock != nil {
-					locker.Unlock(retries, timeout, lock)
-				}
+				nm.Unlock(retries, timeout, lock)
 			}
 		})
 }

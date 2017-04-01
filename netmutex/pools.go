@@ -5,21 +5,21 @@ import (
 	"time"
 )
 
-var lockPool sync.Pool
-
-func getLock() *Lock {
-	l := lockPool.Get()
-	if l == nil {
-		return &Lock{}
-	}
-	return l.(*Lock)
-}
-
-func putLock(l *Lock) {
-	nilCheck(l)
-
-	lockPool.Put(l)
-}
+//var lockPool sync.Pool
+//
+//func getLock() *Lock {
+//	l := lockPool.Get()
+//	if l == nil {
+//		return &Lock{}
+//	}
+//	return l.(*Lock)
+//}
+//
+//func putLock(l *Lock) {
+//	nilCheck(l)
+//
+//	lockPool.Put(l)
+//}
 
 //----------------------------------------------
 var byteBufferPool sync.Pool

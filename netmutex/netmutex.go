@@ -59,7 +59,7 @@ type servers struct {
 	current *server
 }
 
-// Lock - блокировка.
+// Lock - это блокировка.
 type Lock struct {
 	key       string
 	commandID commandID
@@ -82,7 +82,7 @@ type Options struct {
 	//	WriteBufferSize int // Sets the size of the operating system's transmit buffer associated with connections.
 }
 
-// NetMutex реализует блокировки по сети
+// NetMutex реализует блокировки по сети.
 type NetMutex struct {
 	nextCommandID commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	//	ttl             time.Duration // значение по умолчанию для Lock(), Unlock()
@@ -202,36 +202,36 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 //	return nm.Lock(key) // ToDo переделать
 //}
 
-// Получить по ключу существующую блокировку, чтобы можно было убрать чужие блокировки ранешь их истечения их TTL
+// Получить по ключу существующую блокировку, чтобы можно было убрать чужие блокировки ранешь истечения их TTL
 //func (nm *NetMutex) GetLockID(key string) (*Lock, error) {
 //	return nm.Lock(key) // ToDo переделать
 //}
 
-// Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
-func (nm *NetMutex) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) (*Lock, error) {
+// Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
+func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) (error) {
 
 	if len(key) > MaxKeySize {
-		return nil, ErrLongKey
+		return ErrLongKey
 	}
 
 	if ttl < 0 {
-		return nil, ErrWrongTTL
+		return ErrWrongTTL
 	}
 
 	id := nm.commandID()
 
 	err := nm.runCommand(key, id, code.LOCK, timeout, ttl, commandID{}, retries)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	lock := getLock()
+	//lock := getLock()
 
 	lock.key = key
 	lock.commandID = id
 	lock.timeout = timeout
 
-	return lock, nil
+	return nil
 
 }
 
@@ -240,7 +240,7 @@ func (nm *NetMutex) Lock(retries int, timeout time.Duration, key string, ttl tim
 //	return lock.key
 //}
 
-// Update пытается у ключа key обновить ttl, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
+// Update пытается у блокировки lock обновить ttl, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
 // Позволяет продлять время жизни блокировки.
 // Подходит для реализации heartbeat-а, позволяющего оптимальнее управлять ttl ключа.
 func (nm *NetMutex) Update(retries int, timeout time.Duration, lock *Lock, ttl time.Duration) error {
@@ -255,13 +255,13 @@ func (nm *NetMutex) Update(retries int, timeout time.Duration, lock *Lock, ttl t
 	return nm.runCommand(lock.key, nm.commandID(), code.UPDATE, timeout, ttl, lock.commandID, retries)
 }
 
-// Unlock пытается снять блокировку у ключа key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
+// Unlock пытается снять блокировку lock, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
 func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error {
 	if lock == nil {
 		return errLockIsNil
 	}
 
-	defer putLock(lock)
+	//defer putLock(lock)
 
 	return nm.runCommand(lock.key, nm.commandID(), code.UNLOCK, lock.timeout, 0, lock.commandID, retries)
 }

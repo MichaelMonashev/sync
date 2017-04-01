@@ -179,11 +179,11 @@ func TestLock1(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-
+	lock := &Lock{}
 	key := "test"
 
 	for i := 1000; i > 0; i-- {
-		lock, err := nm.Lock(retries, timeout, key, ttl)
+		err := nm.Lock(retries, timeout, lock, key, ttl)
 
 		if err != nil {
 			t.Fatal("can't lock", err)
@@ -212,10 +212,10 @@ func TestLock2(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-
+	lock := &Lock{}
 	badKey := strings.Repeat("a", 300)
 
-	_, err = nm.Lock(retries, timeout, badKey, ttl)
+	err = nm.Lock(retries, timeout, lock, badKey, ttl)
 
 	if err == nil {
 		t.Fatal("must be error")
@@ -236,10 +236,10 @@ func TestLockUpdate(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-
+	lock := &Lock{}
 	key := "a"
 
-	lock, err := nm.Lock(retries, timeout, key, ttl)
+	err = nm.Lock(retries, timeout, lock, key, ttl)
 
 	if err != nil {
 		t.Fatal("can't lock", err)
@@ -282,12 +282,12 @@ func TestUlockall(t *testing.T) {
 // делает кучу аллокаций
 //func BenchmarkLock(b *testing.B) {
 //
-//	locker, err := Open(10,time.Second,addresses, nil)
+//	nm, err := Open(10,time.Second,addresses, nil)
 //	if err != nil {
 //		b.Fatal(err)
 //	}
 //
-//	defer locker.Close()
+//	defer nm.Close()
 //
 //	b.ResetTimer()
 //
@@ -297,7 +297,7 @@ func TestUlockall(t *testing.T) {
 //
 //	key := "a"
 //	for n := 0; n < b.N; n++ {
-//		locker.Lock(retries, timeout, key, ttl)
+//		nm.Lock(retries, timeout, key, ttl)
 //	}
 //}
 
@@ -345,11 +345,11 @@ func BenchmarkUDPWrite(b *testing.B) {
 
 func BenchmarkParallel(b *testing.B) {
 
-	locker, err := Open(10, time.Minute, addresses, nil)
+	nm, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer locker.Close(1, time.Minute)
+	defer nm.Close(1, time.Minute)
 
 	b.SetParallelism(10)
 	//b.SetBytes(10) // это не байты, а количество запросов к серверу: 1 лок, 1 анлок и 8 апдейтов. итого: 10
@@ -359,20 +359,21 @@ func BenchmarkParallel(b *testing.B) {
 		retries := 10
 		timeout := time.Minute
 		ttl := time.Second
+		lock := &Lock{}
 		key := "a"
 		i := 0
 
 		for pb.Next() {
 			i++
 
-			lock, _ := locker.Lock(retries, timeout, fmt.Sprint(key, "_", i), ttl)
+			nm.Lock(retries, timeout, lock, fmt.Sprint(key, "_", i), ttl)
 
 			for i := 0; i < 8; i++ {
-				locker.Update(retries, timeout, lock, ttl)
+				nm.Update(retries, timeout, lock, ttl)
 			}
 
 			if lock != nil {
-				locker.Unlock(retries, timeout, lock)
+				nm.Unlock(retries, timeout, lock)
 			}
 		}
 	})
