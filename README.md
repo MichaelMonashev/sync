@@ -1,6 +1,6 @@
 # sync/netmutex - Go client to lock server
 
-Golang client library for reliable distributed lock-servers. Zero memory allocation fot hot path. Goroutine-safe.
+Golang client library for reliable distributed lock-servers. Zero memory allocation for hot path. Goroutine-safe.
 
 [![GoDoc](https://godoc.org/github.com/MichaelMonashev/sync/netmutex?status.svg)](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
@@ -113,4 +113,4 @@ Full code:
 	BenchmarkLock-8      	500000	 62164 ns/op	153 B/op	 6 allocs/op
 	BenchmarkLockUnlock-8	200000	135380 ns/op	211 B/op	10 allocs/op
 
-Golang runtime produce all memory allocations. I think, it will fixed soon by Go team.
+Mock server produce all memory allocations.
