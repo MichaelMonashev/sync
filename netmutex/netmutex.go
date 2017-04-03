@@ -1,4 +1,4 @@
-// Package netmutex implements low-level client library for distributed lock server.
+// Package netmutex implements low-level high performance client library for lock server.
 // Очень важно корректно обрабатывать ошибки, которые возвращают функции.
 package netmutex
 
@@ -26,7 +26,7 @@ var (
 	// Соединение было закрыто ранее.
 	ErrDisconnected = errors.New("Client connection had closed.")
 
-	// Клиент был изолирован.
+	// Клиент был изолирован. Нужно завершить работу с программы.
 	ErrIsolated = errors.New("Client had isolated.")
 
 	// Ключ заблокирован кем-то другим.
@@ -74,24 +74,12 @@ func (l *Lock) String() string {
 // Options задаёт дополнительные параметры соединения.
 type Options struct {
 	IsolationInfo string // Информация о том, как в случае неработоспособности будет изолироваться клиент.
-	//	TTL             time.Duration // Time to live - значение по-умолчанию времени жизни блокировки.
-	//	Timeout         time.Duration // Значение по-умолчанию для времени, за которое кластер распределённых блокировок будет пытаться установить или снять блокировку.
-	//	Retries         int         // Количество попыток отправить запрос в кластер.
-
-	//	ReadBufferSize  int // Sets the size of the operating system's receive buffer associated with connections.
-	//	WriteBufferSize int // Sets the size of the operating system's transmit buffer associated with connections.
 }
 
 // NetMutex реализует блокировки по сети.
 type NetMutex struct {
 	nextCommandID commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
-	//	ttl             time.Duration // значение по умолчанию для Lock(), Unlock()
-	//	timeout         time.Duration // значение по умолчанию для Timeout
-	//	retries         int
-	//	readBufferSize  int
-	//	writeBufferSize int
 	done chan struct{}
-	//	responses       chan *response
 	servers         *servers
 	workingCommands *workingCommands
 }
@@ -139,7 +127,6 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 					id:      serverID,
 					addr:    serverAddr,
 					frameID: frameID,
-					// bufCh:  make(chan *acc, 500),
 				}
 
 				remoteServers[serverID] = s
@@ -170,7 +157,6 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 				}
 			}
 
-			//go nm.run()
 
 			return nm, nil
 		}
@@ -179,33 +165,10 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 	return nil, ErrNoServers
 }
 
-// заблокировать, если не было заблокировано ранее
-//func (nm *NetMutex) LockIfUnlocked(key string) (*Lock, error) {
-//	return nil, errors.New("LockIfUnlocked() has not yet implemented.")
-//}
-
-// заблокировать все или ниодного.
-//func (nm *NetMutex) LockEach(keys []string) ([]*Lock, error) {
-//	return nil, errors.New("LockEach() has not yet implemented.")
-//}
-
-// заблокировать всё, что получится.
-//func (nm *NetMutex) LockAny(keys []string) ([]*Lock, error) {
-//	return nil, errors.New("LockAny() has not yet implemented.")
-//}
-
-// заблокировать на чтение. Возможно два варианта реализации этой блокировки на сервере:
-// 1) блокировка на запись устанавливается только если нет ниодной блокировки на чтение, т.е. при большом количестве блокировок на чтение блокировка на запись вообще никогда может не установиться.
-// 2) новые блокировки на чтение не устанавливаются, если пытается установиться блокировка на запись
-// 3) смешанный вариант: блокировка на запись несколько раз пытается установиться, если у неё это не выходит, то новые блокировки на чтение перестают устанавливаться на какое-то время, за которое блокировка на запись должна успеть установиться.
-//func (nm *NetMutex) RLock(key string) (*Lock, error) {
-//	return nm.Lock(key) // ToDo переделать
-//}
-
-// Получить по ключу существующую блокировку, чтобы можно было убрать чужие блокировки ранешь истечения их TTL
-//func (nm *NetMutex) GetLockID(key string) (*Lock, error) {
-//	return nm.Lock(key) // ToDo переделать
-//}
+// RLock пытается заблокировать ключ key на чтение, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
+func (nm *NetMutex) RLock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) error {
+	return nm.Lock(retries, timeout, lock, key, ttl) // ToDo переделать
+}
 
 // Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
 func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) error {
@@ -225,7 +188,6 @@ func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key str
 		return err
 	}
 
-	//lock := getLock()
 
 	lock.key = key
 	lock.commandID = id
@@ -234,11 +196,6 @@ func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key str
 	return nil
 
 }
-
-// Возвращает ключ, по которому произошла блокировка. Удобен в LockEach() и LockAny()
-//func (lock *Lock) Key() string {
-//	return lock.key
-//}
 
 // Update пытается у блокировки lock обновить ttl, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
 // Позволяет продлять время жизни блокировки.
@@ -261,7 +218,6 @@ func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error
 		return errLockIsNil
 	}
 
-	//defer putLock(lock)
 
 	return nm.runCommand(lock.key, nm.commandID(), code.UNLOCK, lock.timeout, 0, lock.commandID, retries)
 }
@@ -354,10 +310,6 @@ func (nm *NetMutex) readResponses(s *server) {
 
 		resp, err := read(s)
 
-		// таймаут нужен для того, чтобы не залипнуть в чтении навечно, а можно было иногда от туда возвращаться,
-		// например, чтобы корректно закончить работу клиента
-		//resp, err := readWithTimeout(s, time.Second)
-
 		// если произошёл таймаут, выставленный строчкой выше, или ошибка временная
 		if netErr, ok := err.(*net.OpError); ok {
 			if netErr.Timeout() || netErr.Temporary() {
@@ -367,7 +319,6 @@ func (nm *NetMutex) readResponses(s *server) {
 
 		if err != nil {
 			// пример ошибки: read udp 127.0.0.1:19858->127.0.0.1:3002: read: connection refused
-			//warn(err)
 			s.fail()
 			continue
 		}
@@ -502,7 +453,6 @@ func (nm *NetMutex) server() (*server, error) {
 
 	var bestFails uint32
 	var bestServer *server
-	//bestServer := nm.servers.current
 	for _, s := range nm.servers.m {
 		// пропускаем несоединившиеся серверы
 		if s.conn == nil {

@@ -1,4 +1,4 @@
-// Package code contain command ids for clent-server interaction.
+// Package code contain commands for clent-server interaction.
 package code
 
 // коды запросов от клиентов
@@ -9,6 +9,7 @@ const (
 	DISCONNECT        // запрос на отсоединение
 
 	LOCK      // запрос заблокировать ключ
+	RLOCK     // запрос заблокировать ключ на чтение
 	UPDATE    // запрос обновить информацию о заблокированном ключе
 	UNLOCK    // запрос снять блокировку с ранее заблокированного ключа
 	UNLOCKALL // запрос снять все блокировки

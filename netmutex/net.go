@@ -24,7 +24,6 @@ func write(s *server, req *request) error {
 	// если сервер перегружен, то перед отправкой запроса сделаем небольшую паузу пропорционально его нагруженности
 	serverBusy := atomic.LoadInt32(&s.busy)
 	if serverBusy > 0 {
-		//warn("Спим", serverBusy*busyStep)
 		time.Sleep(time.Duration(serverBusy) * busyStep)
 	}
 
@@ -39,29 +38,6 @@ func write(s *server, req *request) error {
 	_, err = s.conn.Write(b.buf[0:n])
 	return err
 }
-
-// ToDo: склеивать буферы иначе: заголовой, несколько команд, хвост. Так больше команд влезет в один пакет.
-//func writeBuffered(s *server, command *command) error {
-//	// если сервер перегружен, то перед отправкой запроса сделаем небольшую паузу пропорционально его нагруженности
-//	busy := atomic.LoadInt32(&s.busy)
-//	if busy > 0 {
-//		//warn("Спим", serverBusy*busyStep, s.conn.LocalAddr())
-//		time.Sleep(time.Duration(busy) * busyStep)
-//	}
-//
-//	b := getAcc()
-//	defer putAcc(b)
-//
-//	n, err := command.marshalPacket(b.buf, s.connID, s.getSeqID())
-//	if err != nil {
-//		return err
-//	}
-//
-//	b.buf = b.buf[0:n]
-//	s.bufCh <- b
-//
-//	return <-b.err
-//}
 
 func readWithTimeout(s *server, timeout time.Duration) (*response, error) {
 	err := s.conn.SetReadDeadline(time.Now().Add(timeout))

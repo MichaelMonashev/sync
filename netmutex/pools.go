@@ -5,22 +5,6 @@ import (
 	"time"
 )
 
-//var lockPool sync.Pool
-//
-//func getLock() *Lock {
-//	l := lockPool.Get()
-//	if l == nil {
-//		return &Lock{}
-//	}
-//	return l.(*Lock)
-//}
-//
-//func putLock(l *Lock) {
-//	nilCheck(l)
-//
-//	lockPool.Put(l)
-//}
-
 //----------------------------------------------
 var byteBufferPool sync.Pool
 
@@ -61,7 +45,6 @@ func getRequest() *request {
 			processChan: make(chan *response),
 			done:        make(chan struct{}),
 			timer:       timer,
-			//retries:     0,
 		}
 	}
 	return req.(*request)
@@ -94,30 +77,4 @@ func putResponse(r *response) {
 	}
 
 	responsePool.Put(r)
-}
-
-//----------------------------------------------
-var accPool sync.Pool
-
-type acc struct {
-	buf []byte
-	err chan error
-}
-
-func getAcc() *acc {
-	b := accPool.Get()
-	if b == nil {
-		return &acc{
-			buf: make([]byte, defaultByteBufferSize),
-			err: make(chan error, 1),
-		}
-	}
-	return b.(*acc)
-}
-
-func putAcc(b *acc) {
-	nilCheck(b)
-
-	b.buf = b.buf[0:defaultByteBufferSize]
-	accPool.Put(b)
 }

@@ -20,6 +20,57 @@ func BenchmarkMain(mb *testing.B) {
 	ttl := time.Second
 	key := "a"
 
+	mb.Run("Lock",
+		func(b *testing.B) {
+
+			lock := &Lock{}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				nm.Lock(retries, timeout, lock, key, ttl)
+			}
+		})
+
+
+	mb.Run("RLock",
+		func(b *testing.B) {
+
+			lock := &Lock{}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				nm.RLock(retries, timeout, lock, key, ttl)
+			}
+		})
+
+	mb.Run("Unlock",
+		func(b *testing.B) {
+
+			lock := &Lock{}
+			nm.Lock(retries, timeout, lock, key, ttl)
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				nm.Unlock(retries, timeout, lock)
+			}
+		})
+
+	mb.Run("Update",
+		func(b *testing.B) {
+
+			lock := &Lock{}
+			nm.Lock(retries, timeout, lock, key, ttl)
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				nm.Update(retries, timeout, lock, ttl)
+			}
+		})
+
 	mb.Run("LockUnlock",
 		func(b *testing.B) {
 
@@ -35,7 +86,7 @@ func BenchmarkMain(mb *testing.B) {
 			}
 		})
 
-	mb.Run("LockUpdateUnlock",
+	mb.Run("Lock8UpdatesUnlock",
 		func(b *testing.B) {
 			lock := &Lock{}
 

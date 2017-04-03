@@ -121,11 +121,6 @@ func TestCommandId(t *testing.T) {
 // normal operation
 func TestConnect1(t *testing.T) {
 	netmutex := &NetMutex{
-		//		ttl:             DefaultTTL,
-		//		timeout:         DefaultTimeout,
-		//		retries:         DefaultRetries,
-		//		readBufferSize:  DefaultReadBufferSize,
-		//		writeBufferSize: DefaultWriteBufferSize,
 		done: make(chan struct{}),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*request),
@@ -149,11 +144,6 @@ func TestConnect1(t *testing.T) {
 // соединиться с несуществующим сервером
 func TestConnect2(t *testing.T) {
 	netmutex := &NetMutex{
-		//		ttl:             DefaultTTL,
-		//		timeout:         DefaultTimeout,
-		//		retries:         DefaultRetries,
-		//		readBufferSize:  DefaultReadBufferSize,
-		//		writeBufferSize: DefaultWriteBufferSize,
 		done: make(chan struct{}),
 		workingCommands: &workingCommands{
 			m: make(map[commandID]*request),
@@ -278,28 +268,6 @@ func TestUlockall(t *testing.T) {
 		t.Fatal("can't unlock all", err)
 	}
 }
-
-// делает кучу аллокаций
-//func BenchmarkLock(b *testing.B) {
-//
-//	nm, err := Open(10,time.Second,addresses, nil)
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	defer nm.Close()
-//
-//	b.ResetTimer()
-//
-//	retries := 10
-//	timeout := time.Minute
-//	ttl := time.Second
-//
-//	key := "a"
-//	for n := 0; n < b.N; n++ {
-//		nm.Lock(retries, timeout, key, ttl)
-//	}
-//}
 
 // On FreeBSD 11.0:
 // BenchmarkUDPWrite-4  3000000  4158 ns/op  33.66 MB/s  0 B/op  0 allocs/op

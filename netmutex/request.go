@@ -33,7 +33,6 @@ type request struct {
 	retries       int            // количество запросов к серверам, прежде чем вернуть ошибку
 	isolationInfo string         // информация об изоляции клиента
 	code          byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
-	//t             time.Time// удалить. для дебага.
 }
 
 type commandID struct {
@@ -290,7 +289,6 @@ func (req *request) send(server *server) {
 
 		req.timer.Reset(req.timeout)
 
-		//err = writeBuffered(server, req)
 		err = write(server, req)
 		if err == nil { // если нет ошибки, то выходим из функции и ждём прихода ответа или срабатывания таймера
 			return
@@ -357,20 +355,6 @@ func (req *request) process(resp *response) bool {
 	case code.ERROR:
 		req.currentServer.ok()
 		req.respChan <- errors.New(resp.description)
-
-		// Важно!!!
-		// Большая нагрузка на сервер должна обрабатываться не здесь и не так.
-		// BUSY - команда транспортного уровня
-		// Она должна приводить к паузе, а не к смене сервера
-		//	case BUSY:
-		//		req.currentServer.fail()
-		//
-		//		if req.isEnoughRetries() {
-		//			req.respChan <- ErrBusy
-		//		} else { // повторяем запрос к загруженному серверу
-		//			req.sendChan <- req.currentServer
-		//			return false
-		//		}
 
 	default:
 		req.respChan <- errWrongResponse
