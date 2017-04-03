@@ -66,11 +66,6 @@ type Lock struct {
 	timeout   time.Duration
 }
 
-// String возвращает текстовое представление блокировки.
-func (l *Lock) String() string {
-	return l.key
-}
-
 // Options задаёт дополнительные параметры соединения.
 type Options struct {
 	IsolationInfo string // Информация о том, как в случае неработоспособности будет изолироваться клиент.
