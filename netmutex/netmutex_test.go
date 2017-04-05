@@ -17,10 +17,11 @@ import (
 
 type callback func(*net.UDPConn, *net.UDPAddr, []byte)
 
-var addresses []string = []string{
+var addresses = []string{
 	"127.0.0.1:3001",
 	"127.0.0.1:3002",
-	"127.0.0.1:3003"}
+	"127.0.0.1:3003",
+}
 
 func TestMain(m *testing.M) {
 	// запускаем правильно функционирующие сервера
@@ -109,9 +110,9 @@ func TestCommandId(t *testing.T) {
 	connectionID := nm.nextCommandID.connectionID
 	requestID := atomic.LoadUint64(&nm.nextCommandID.requestID)
 
-	nextCommandId := nm.commandID()
+	nextCommandID := nm.commandID()
 
-	if !(nextCommandId.connectionID == connectionID && nextCommandId.requestID == requestID+1) {
+	if !(nextCommandID.connectionID == connectionID && nextCommandID.requestID == requestID+1) {
 		t.Fatal()
 	}
 }

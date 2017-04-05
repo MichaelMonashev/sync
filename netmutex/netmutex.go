@@ -23,28 +23,28 @@ const (
 
 // Коды возвращаемых ошибок.
 var (
-	// Соединение было закрыто ранее.
+	// ErrDisconnected - cоединение было закрыто ранее.
 	ErrDisconnected = errors.New("Client connection had closed.")
 
-	// Клиент был изолирован. Нужно завершить работу с программы.
+	// ErrIsolated - клиент был изолирован. Нужно завершить работу с программы.
 	ErrIsolated = errors.New("Client had isolated.")
 
-	// Ключ заблокирован кем-то другим.
+	// ErrLocked - ключ заблокирован кем-то другим.
 	ErrLocked = errors.New("Key locked.")
 
-	// Не удалось подключиться ни к одному серверу из списка или все они стали недоступны.
+	// ErrNoServers - не удалось подключиться ни к одному серверу из списка или все они стали недоступны.
 	ErrNoServers = errors.New("No working servers.")
 
-	// Превышено количество попыток отправить команду на сервер.
+	// ErrTooMuchRetries - превышено количество попыток отправить команду на сервер.
 	ErrTooMuchRetries = errors.New("Too much retries.")
 
-	// Ключ длиннее MaxKeySize байт.
+	// ErrLongKey - ключ длиннее MaxKeySize байт.
 	ErrLongKey = errors.New("Key too long.")
 
-	// TTL меньше нуля.
+	// ErrWrongTTL - TTL меньше нуля.
 	ErrWrongTTL = errors.New("Wrong TTL.")
 
-	// Информация для изоляции клиента длиннее MaxIsolationInfo байт.
+	// ErrLongIsolationInfo - информация для изоляции клиента длиннее MaxIsolationInfo байт.
 	ErrLongIsolationInfo = errors.New("Client isolation information too long.")
 )
 
