@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 			1: "127.0.0.1:3001",
 			2: "127.0.0.1:3002",
 			3: "127.0.0.1:3003",
-		}, mockOk)
+		}, mockPong)
 
 		if err != nil {
 			log.Fatal(err)
@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 	// запускаем кривой сервер, который неправильно понгает
 	mockServer1, err := mockStartServer(uint64(4), map[uint64]string{
 		4: "127.0.0.1:3005",
-	}, mockLocked)
+	}, mockOk)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,8 +54,7 @@ func TestMain(m *testing.M) {
 
 // штатная попытка соединения
 func TestOpen1(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses,
-		nil)
+	nm, err := Open(10, time.Minute, addresses, nil)
 
 	if err != nil {
 		t.Fatal(err)
@@ -107,13 +106,12 @@ func TestCommandId(t *testing.T) {
 	}
 	defer nm.Close(1, time.Minute)
 
-	serverID := nm.nextCommandID.serverID
 	connectionID := nm.nextCommandID.connectionID
 	requestID := atomic.LoadUint64(&nm.nextCommandID.requestID)
 
 	nextCommandId := nm.commandID()
 
-	if !(nextCommandId.serverID == serverID && nextCommandId.connectionID == connectionID && nextCommandId.requestID == requestID+1) {
+	if !(nextCommandId.connectionID == connectionID && nextCommandId.requestID == requestID+1) {
 		t.Fatal()
 	}
 }
@@ -179,10 +177,6 @@ func TestLock1(t *testing.T) {
 			t.Fatal("can't lock", err)
 		}
 
-		if lock == nil {
-			t.Fatal("lock can't be nil")
-		}
-
 		err = nm.Unlock(retries, timeout, lock)
 
 		if err != nil {
@@ -233,10 +227,6 @@ func TestLockUpdate(t *testing.T) {
 
 	if err != nil {
 		t.Fatal("can't lock", err)
-	}
-
-	if lock == nil {
-		t.Fatal("lock can't be nil")
 	}
 
 	err = nm.Update(retries, timeout, lock, ttl)
@@ -400,9 +390,6 @@ func mockRun(conn *net.UDPConn, serverID uint64, moskServers map[uint64]string, 
 			}
 		}
 
-		//// deadline нужен чтобы можно было выйти из цикла и завершить работу
-		//conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-
 		n, addr, err := conn.ReadFromUDP(b.buf)
 		if err != nil {
 			// если произошёл не таймаут, а что-то другое
@@ -426,35 +413,35 @@ func mockProccessReq(b *byteBuffer, n int, serverID uint64, moskServers map[uint
 		switch b.buf[pos+0] {
 		case code.CONNECT:
 			mockOnConnect(conn, addr, serverID, moskServers)
-			pos += 1 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+3:])) + 24
+			pos += 1 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+1:]))
 
 		case code.PING:
 			pongFunc(conn, addr, b.buf[pos:])
-			pos += 25 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+25:]))
+			pos += 1 + 16 + 2 + int(binary.LittleEndian.Uint16(b.buf[pos+17:]))
 
 		case code.TOUCH:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 25
+			pos += 1 + 16
 
 		case code.DISCONNECT:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 25
+			pos += 1 + 16
 
 		case code.LOCK:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 42 + int(b.buf[pos+41]) + 24
+			pos += 1 + 16 + 8 + 1 + int(b.buf[pos+25])
 
 		case code.UPDATE:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 66 + int(b.buf[pos+65]) + 24
+			pos += 1 + 16 + 16 + 8 + 1 + int(b.buf[pos+41])
 
 		case code.UNLOCK:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 58 + int(b.buf[pos+57])
+			pos += 1 + 16 + 16 + 1 + int(b.buf[pos+33])
 
 		case code.UNLOCKALL:
 			mockOk(conn, addr, b.buf[pos:])
-			pos += 33
+			pos += 1 + 16
 
 		default:
 			warn("Wrong command", fmt.Sprint(b.buf[pos+0]), pos, n, b.buf)
@@ -471,20 +458,16 @@ func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, serverID uint64, moskSe
 	// записываем версию
 	b.buf[0] = 1
 
-	// записываем приоритет
-	b.buf[1] = 128 // выше среднего
-
-	// записываем код команды
-	b.buf[2] = 0 // одиночный пакет
+	// записываем флаги
+	b.buf[1] = 0 // одиночный пакет
 
 	b.buf[protocolHeaderSize+0] = code.OPTIONS
 
-	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+1:], serverID)
-	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+9:], 1)
+	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+1:], 1)
 
-	binary.LittleEndian.PutUint64(b.buf[protocolHeaderSize+17:], uint64(len(moskServers)))
+	binary.LittleEndian.PutUint16(b.buf[protocolHeaderSize+9:], uint16(len(moskServers)))
 
-	serversPos := protocolHeaderSize + 25
+	serversPos := protocolHeaderSize + 11
 	for serverID, serverString := range moskServers {
 		// id сервера
 		binary.LittleEndian.PutUint64(b.buf[serversPos:], serverID)
@@ -500,7 +483,7 @@ func mockOnConnect(conn *net.UDPConn, addr *net.UDPAddr, serverID uint64, moskSe
 	}
 
 	// записываем длину
-	binary.LittleEndian.PutUint64(b.buf[8:], uint64(serversPos+protocolTailSize))
+	binary.LittleEndian.PutUint16(b.buf[2:], uint16(serversPos+protocolTailSize))
 
 	// записываем контрольную сумму
 	chsum := checksum.Checksum(b.buf[:serversPos])
@@ -522,56 +505,53 @@ func mockOk(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
 	// записываем версию
 	b.buf[0] = 1
 
-	// записываем приоритет
-	b.buf[1] = 128 // выше среднего
+	// записываем флаги
+	b.buf[1] = 0 // одиночный пакет
 
-	// записываем код команды
-	b.buf[2] = 0 // одиночный пакет
+	b.buf[protocolHeaderSize+0] = code.OK
 
-	b.buf[32] = code.OK
-
-	copy(b.buf[33:], reqB[1:25])
+	copy(b.buf[protocolHeaderSize+1:], reqB[1:16])
 
 	// записываем длину
-	binary.LittleEndian.PutUint64(b.buf[8:], uint64(protocolHeaderSize+25+protocolTailSize))
+	binary.LittleEndian.PutUint16(b.buf[2:], uint16(protocolHeaderSize+1+16+protocolTailSize))
 
 	// записываем контрольную сумму
-	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+25])
-	copy(b.buf[protocolHeaderSize+25:], chsum[:])
+	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+1+16])
+	copy(b.buf[protocolHeaderSize+1+16:], chsum[:])
 
-	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+25+protocolTailSize], addr)
+	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+1+16+protocolTailSize], addr)
 	if err != nil {
 		warn(err)
 	}
 }
 
-// ошибочный пинг-понг - не понгает в ответ на пинг
-// нужно для тестирования правильности отработки коннекта
-func mockLocked(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
+func mockPong(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
 	b := getByteBuffer()
 	defer putByteBuffer(b)
 
 	// записываем версию
 	b.buf[0] = 1
 
-	// записываем приоритет
-	b.buf[1] = 128 // выше среднего
+	// записываем флаги
+	b.buf[1] = 0 // одиночный пакет
 
-	// записываем код команды
-	b.buf[2] = 0 // одиночный пакет
+	b.buf[protocolHeaderSize+0] = code.PONG
 
-	b.buf[32] = code.LOCKED
+	copy(b.buf[protocolHeaderSize+1:], reqB[1:16])
 
-	copy(b.buf[33:], reqB[1:25])
+	pingSize := int(binary.LittleEndian.Uint16(reqB[17:]))
+
+	// записываем количество нулей
+	binary.LittleEndian.PutUint16(b.buf[protocolHeaderSize+1+16:], uint16(pingSize))
 
 	// записываем длину
-	binary.LittleEndian.PutUint64(b.buf[8:], uint64(protocolHeaderSize+25+protocolTailSize))
+	binary.LittleEndian.PutUint16(b.buf[2:], uint16(protocolHeaderSize+1+16+2+pingSize+protocolTailSize))
 
 	// записываем контрольную сумму
-	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+25])
-	copy(b.buf[protocolHeaderSize+25:], chsum[:])
+	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+1+16+2+pingSize])
+	copy(b.buf[protocolHeaderSize+1+16+2+pingSize:], chsum[:])
 
-	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+25+protocolTailSize], addr)
+	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+1+16+2+pingSize+protocolTailSize], addr)
 	if err != nil {
 		warn(err)
 	}

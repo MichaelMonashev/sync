@@ -1,15 +1,22 @@
-// Package checksum calculates the checksum.
+// Package checksum считает контрольную сумму.
 package checksum
 
 import (
-	"crypto/md5"
+	"hash/crc32"
 )
 
-// Size is checksum size
-const Size = md5.Size
+const Size = crc32.Size
 
-// Checksum returns the MD5-checksum of buf.
-func Checksum(buf []byte) [Size]byte {
-	//return crc64.Checksum(buf, table)
-	return md5.Sum(buf)
+var table = crc32.MakeTable(crc32.Castagnoli) // Castagnoli имеет ассемблерную инструкцию в SSE4.2, поэтому быстрое.
+
+// Checksum returns the crc32 checksum of buf.
+func Checksum(buf []byte) (b [Size]byte) {
+	v := crc32.Checksum(buf, table)
+
+	b[0] = byte(v >> 24)
+	b[1] = byte(v >> 16)
+	b[2] = byte(v >> 8)
+	b[3] = byte(v)
+
+	return
 }

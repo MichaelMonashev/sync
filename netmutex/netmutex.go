@@ -73,8 +73,8 @@ type Options struct {
 
 // NetMutex реализует блокировки по сети.
 type NetMutex struct {
-	nextCommandID commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
-	done chan struct{}
+	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
+	done            chan struct{}
 	servers         *servers
 	workingCommands *workingCommands
 }
@@ -113,15 +113,9 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 			// а у не прошедших проверку серверов увеличить Fails
 			for serverID, serverAddr := range resp.servers {
 
-				frameID, err := genFrameID()
-				if err != nil { // ошибка значит невозможность сгенерить номер соединения. скорее всего проблема не пропадёт на следующем сервере, так что лучше сразу вернуть ошибку
-					return nil, err
-				}
-
 				s := &server{
-					id:      serverID,
-					addr:    serverAddr,
-					frameID: frameID,
+					id:   serverID,
+					addr: serverAddr,
 				}
 
 				remoteServers[serverID] = s
@@ -152,17 +146,11 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 				}
 			}
 
-
 			return nm, nil
 		}
 	}
 
 	return nil, ErrNoServers
-}
-
-// RLock пытается заблокировать ключ key на чтение, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
-func (nm *NetMutex) RLock(retries int, timeout time.Duration, lock *Lock, key string, ttl time.Duration) error {
-	return nm.Lock(retries, timeout, lock, key, ttl) // ToDo переделать
 }
 
 // Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в lock.
@@ -182,7 +170,6 @@ func (nm *NetMutex) Lock(retries int, timeout time.Duration, lock *Lock, key str
 	if err != nil {
 		return err
 	}
-
 
 	lock.key = key
 	lock.commandID = id
@@ -212,7 +199,6 @@ func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error
 	if lock == nil {
 		return errLockIsNil
 	}
-
 
 	return nm.runCommand(lock.key, nm.commandID(), code.UNLOCK, lock.timeout, 0, lock.commandID, retries)
 }
@@ -255,10 +241,11 @@ func (nm *NetMutex) touch(s *server) {
 	command := getRequest()
 	defer putRequest(command)
 
-	command.id = nm.commandID()
 	command.code = code.TOUCH
 
 	for {
+		time.Sleep(10 * time.Minute) // ToDo Вынести в константы
+
 		// выходим из цикла, если клиент закончил свою работу
 		select {
 		case <-nm.done:
@@ -269,8 +256,6 @@ func (nm *NetMutex) touch(s *server) {
 		command.id = nm.commandID()
 
 		write(s, command) // ответ именно для этого command.id нам не важен, так что не запускаем горутину, ждущую именно этот ответ.
-
-		time.Sleep(10 * time.Minute) // ToDo Вынести в константы
 	}
 }
 
@@ -297,7 +282,6 @@ func (nm *NetMutex) readResponses(s *server) {
 			s.lastReadDeadlineTime = currentTime
 			err := s.conn.SetReadDeadline(currentTime.Add(time.Minute))
 			if err != nil {
-				//warn(err)
 				s.fail()
 				continue
 			}
@@ -371,16 +355,10 @@ func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo st
 
 	defer conn.Close()
 
-	frameID, err := genFrameID()
-	if err != nil {
-		return nil, err
-	}
-
 	s := &server{
-		id:      0,
-		addr:    addr,
-		conn:    conn,
-		frameID: frameID,
+		id:   0,
+		addr: addr,
+		conn: conn,
 	}
 
 	req := &request{
@@ -397,6 +375,7 @@ func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo st
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.code != code.OPTIONS {
 		return nil, errWrongResponse
 	}
@@ -429,7 +408,6 @@ func (nm *NetMutex) ping(s *server, timeout time.Duration) error {
 
 func (nm *NetMutex) commandID() commandID {
 	return commandID{
-		serverID:     nm.nextCommandID.serverID,
 		connectionID: nm.nextCommandID.connectionID,
 		requestID:    atomic.AddUint64(&nm.nextCommandID.requestID, 1),
 	}

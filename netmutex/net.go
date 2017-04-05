@@ -30,7 +30,7 @@ func write(s *server, req *request) error {
 	b := getByteBuffer()
 	defer putByteBuffer(b)
 
-	n, err := req.marshalPacket(b.buf, s.frameID, s.getSeqID())
+	n, err := req.marshalPacket(b.buf)
 	if err != nil {
 		return err
 	}

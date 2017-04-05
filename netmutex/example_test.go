@@ -21,7 +21,7 @@ func Example() error {
 	}
 
 	options := &Options{
-		// information for client killing or host remote reboot
+		// information about client restart or host remote reboot
 		IsolationInfo: fmt.Sprintf("Hostname: %s\nPid: %d", hostname, os.Getpid()),
 	}
 
@@ -43,7 +43,7 @@ func Example() error {
 
 	var done uint32
 
-	// run heartbeat
+	// run heartbeat in background
 	go func() {
 		heartbeatTimeout := 6 * time.Second // much less than `ttl`
 		heartbeatRetries := 1
@@ -66,7 +66,7 @@ func Example() error {
 		}
 	}()
 
-	// do something...
+	// do something under the lock
 
 	// stop heartbeat
 	atomic.StoreUint32(&done, 1)

@@ -31,18 +31,18 @@ func (resp *response) unmarshalPacket(buf []byte) (bool, error) {
 	}
 
 	// перегружен ли сервер
-	if buf[2]&code.BUSY > 0 {
+	if buf[1]&code.BUSY > 0 {
 		busy = true
 	}
 
 	// пока принимаем только одиночные пакеты
-	if buf[2]&code.FRAGMENTED > 0 {
+	if buf[1]&code.FRAGMENTED > 0 {
 		return busy, errWrongResponse
 	}
 
 	// проверяем длину пакета
-	size := binary.LittleEndian.Uint64(buf[8:])
-	if size != uint64(len(buf)) {
+	size := int(binary.LittleEndian.Uint16(buf[2:]))
+	if size != len(buf) {
 		return busy, errWrongResponse
 	}
 
@@ -59,24 +59,26 @@ func (resp *response) unmarshalPacket(buf []byte) (bool, error) {
 
 func (resp *response) unmarshalCommand(buf []byte) error {
 
-	if len(buf) < 25 {
+	if len(buf) < 17 {
 		return errWrongResponse //Errorln("wrong data size", len(buf))
 	}
 
 	resp.code = buf[0] //  0 байт - команда: OPTIONS, OK, и т.д.
 	switch resp.code {
 	case code.OPTIONS:
+		if len(buf) < 11 {
+			return errWrongResponse //Errorln("wrong packet size", bufSize, "in OPTIONS.")
+		}
 
-		resp.id.serverID = binary.LittleEndian.Uint64(buf[1:])
-		resp.id.connectionID = binary.LittleEndian.Uint64(buf[9:])
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
 
-		nubmerOfServers := binary.LittleEndian.Uint64(buf[17:])
+		nubmerOfServers := binary.LittleEndian.Uint16(buf[9:])
 
 		if nubmerOfServers < 1 || nubmerOfServers > 7 {
 			return errWrongResponse //Errorln("wrong number of servers", serversNum, "in OPTIONS")
 		}
 
-		pos := 25
+		pos := 11
 		for i := nubmerOfServers; i > 0; i-- {
 
 			//проверяем, что pos не выйдет за границы buf
@@ -103,37 +105,46 @@ func (resp *response) unmarshalCommand(buf []byte) error {
 			return errWrongResponse //Errorln("wrong packet size", bufSize, "in OPTIONS")
 		}
 
+	case code.PONG:
+		if len(buf) < 27 {
+			return errWrongResponse //Errorln("wrong packet size", bufSize, "in PONG.")
+		}
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
+		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
+
+		size := int(binary.LittleEndian.Uint16(buf[17:]))
+		if size != len(buf)+25 {
+			return errWrongResponse //Errorln("wrong packet size", bufSize, "in PONG")
+		}
+
 	case code.OK, code.DISCONNECTED, code.ISOLATED, code.LOCKED:
-		if len(buf) != 25 {
+		if len(buf) != 17 {
 			return errWrongResponse //Errorln("wrong packet size", bufSize, "in OK, DISCONNECTED, ISOLATED or LOCKED.")
 		}
-		resp.id.serverID = binary.LittleEndian.Uint64(buf[1:])
-		resp.id.connectionID = binary.LittleEndian.Uint64(buf[9:])
-		resp.id.requestID = binary.LittleEndian.Uint64(buf[17:])
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
+		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
 
 	case code.REDIRECT:
-		if len(buf) != 33 {
+		if len(buf) != 25 {
 			return errWrongResponse //Errorln("wrong packet size", bufSize, "in REDIRECT")
 		}
-		resp.id.serverID = binary.LittleEndian.Uint64(buf[1:])
-		resp.id.connectionID = binary.LittleEndian.Uint64(buf[9:])
-		resp.id.requestID = binary.LittleEndian.Uint64(buf[17:])
-		resp.serverID = binary.LittleEndian.Uint64(buf[25:])
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
+		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
+		resp.serverID = binary.LittleEndian.Uint64(buf[17:])
 
 	case code.ERROR:
 		if len(buf) < 25 {
 			return errWrongResponse //Errorln("wrong packet size", bufSize, "in ERROR")
 		}
-		resp.id.serverID = binary.LittleEndian.Uint64(buf[1:])
-		resp.id.connectionID = binary.LittleEndian.Uint64(buf[9:])
-		resp.id.requestID = binary.LittleEndian.Uint64(buf[17:])
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
+		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
 
-		descStringSize := int(buf[25]) // 32 байт - размер текста ошибки
-		if descStringSize+26 != len(buf) {
+		descStringSize := int(buf[17]) // 17 байт - размер текста ошибки
+		if descStringSize+18 != len(buf) {
 			return errWrongResponse //Errorln("wrong description size", descStringSize, bufSize, "in ERROR")
 		}
 
-		resp.description = string(buf[26 : 26+descStringSize])
+		resp.description = string(buf[18 : 18+descStringSize])
 
 	default:
 		return errWrongResponse //Errorln("wrong command code:", fmt.Sprint(resp.code))

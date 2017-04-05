@@ -32,19 +32,6 @@ func BenchmarkMain(mb *testing.B) {
 			}
 		})
 
-
-	mb.Run("RLock",
-		func(b *testing.B) {
-
-			lock := &Lock{}
-
-			b.ResetTimer()
-
-			for i := 0; i < b.N; i++ {
-				nm.RLock(retries, timeout, lock, key, ttl)
-			}
-		})
-
 	mb.Run("Unlock",
 		func(b *testing.B) {
 
