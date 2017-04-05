@@ -5,6 +5,7 @@ import (
 	"hash/crc32"
 )
 
+// Size - Checksum size in bytes
 const Size = crc32.Size
 
 var table = crc32.MakeTable(crc32.Castagnoli) // Castagnoli имеет ассемблерную инструкцию в SSE4.2, поэтому быстрое.

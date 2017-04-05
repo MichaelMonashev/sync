@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
-
 )
 
 func warn(a ...interface{}) {
