@@ -260,8 +260,9 @@ func (req *request) send(server *server) {
 
 		req.timer.Stop()
 
-		// если ошибка в том, что длина ключа слишком велика, то помечать сервер плохим не нужно
-		if err != ErrLongKey {
+		// если ошибка в том, что длина ключа слишком велика, то помечать сервер плохим не нужно.
+		// На самом деле все эти ошибки отлавливаются ещё раньше и тут эти проверки не нужны.
+		if err != ErrLongKey && err!= ErrLongIsolationInfo {
 			req.currentServer.fail()
 		}
 

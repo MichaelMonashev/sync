@@ -97,6 +97,10 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 		isolationInfo = options.IsolationInfo
 	}
 
+	if len(isolationInfo) > MaxIsolationInfo {
+		return nil, ErrLongIsolationInfo
+	}
+
 	// обходим все сервера из списка, пока не найдём доступный
 	for i := 0; i < retries; i++ {
 		for _, addr := range addrs {
@@ -187,6 +191,10 @@ func (nm *NetMutex) Update(retries int, timeout time.Duration, lock *Lock, ttl t
 		return errLockIsNil
 	}
 
+	if len(lock.key) > MaxKeySize {
+		return ErrLongKey
+	}
+
 	if ttl < 0 {
 		return ErrWrongTTL
 	}
@@ -198,6 +206,10 @@ func (nm *NetMutex) Update(retries int, timeout time.Duration, lock *Lock, ttl t
 func (nm *NetMutex) Unlock(retries int, timeout time.Duration, lock *Lock) error {
 	if lock == nil {
 		return errLockIsNil
+	}
+
+	if len(lock.key) > MaxKeySize {
+		return ErrLongKey
 	}
 
 	return nm.runCommand(lock.key, nm.commandID(), code.UNLOCK, lock.timeout, 0, lock.commandID, retries)
