@@ -1,6 +1,6 @@
 # sync/netmutex - Go client to lock server
 
-Golang client library for reliable distributed lock-servers. Zero memory allocation for hot path. Goroutine-safe.
+Low-level high-performance Golang client library for lock server.
 
 [![GoDoc](https://godoc.org/github.com/MichaelMonashev/sync/netmutex?status.svg)](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
@@ -10,26 +10,13 @@ Golang client library for reliable distributed lock-servers. Zero memory allocat
 [![Coverage](https://coveralls.io/repos/github/MichaelMonashev/sync/badge.svg?branch=master)](https://coveralls.io/github/MichaelMonashev/sync?branch=master)
 [![Codecov](https://codecov.io/gh/MichaelMonashev/sync/branch/master/graph/badge.svg)](https://codecov.io/gh/MichaelMonashev/sync)
 
-## Goals
-
- - No bugs;
- - Keep API simple and stable;
- - Low CPU/memory consumption (code inlining, avoid memory allocation, avoid memory copy);
- - Simple, well-documented code. Suitable for easy porting to other languages;
- - No tricks (for compatibility with future Go versions).
-
-## Features
-
- - IPv6 support;
- - Cross-platform.
-
-## Installing
+## Installation
 
 ### Using *go get*
 
 	$ go get github.com/MichaelMonashev/sync/netmutex
 
-After this command *sync/netmutex* is ready to use. Its source will be in:
+Its source will be in:
 
 	$GOPATH/src/github.com/MichaelMonashev/sync/netmutex
 
@@ -41,76 +28,110 @@ or run:
 
 	$ godoc github.com/MichaelMonashev/sync/netmutex
 
+## Performance
+
+200000+ locks per second on 10-years old 8-core Linux box.
+
 ## Example
 
-	lock, err := nm.Lock(key)
-	...
-	err = nm.Unlock(lock)
+Steps:
 
-All steps:
-
- - connect
+ - connect to server
  - lock key
  - execute critical section
  - unlock
  - close connection
 
-Full code:
+Code:
 
 	package main
 
 	import (
 		"fmt"
-		"github.com/MichaelMonashev/sync/netmutex"
+		"os"
+		"sync/atomic"
 		"time"
+
+		"github.com/MichaelMonashev/sync/netmutex"
 	)
 
 	func main() {
-		// Open connection to lock-servers
-		nm, err := netmutex.Open([]string{
-			"10.0.0.1:1234",
-			"10.0.0.2:1234",
-			"10.0.0.3:1234",
-		}, &netmutex.Options{
-			Timeout: time.Minute, // try to lock()/unlock() during this timeout
-			TTL:     time.Second, // unlock a key after this duration
-		})
+		retries := 10
+		timeout := 60 * time.Second
+		addresses := []string{
+			"127.0.0.1:15663",
+		}
+
+		hostname, err := os.Hostname()
 		if err != nil {
-			fmt.Println("Connecting error:", err, ".")
+			fmt.Fprintln(os.Stderr, err)
 			return
 		}
 
-		// Close connection after main() finished
-		defer nm.Close()
+		options := &Options{
+			// information about client restart or host remote reboot
+			IsolationInfo: fmt.Sprintf("Hostname: %s\nPid: %d", hostname, os.Getpid()),
+		}
 
-		key := "some key"
-
-		// Try to lock the key
-		lock, err := nm.Lock(key)
+		// Open connection to a lock-server
+		nm, err := Open(retries, timeout, addresses, options)
 		if err != nil {
-			fmt.Println("Error while lock. Key:", key, "; error:", err, ".")
+			fmt.Fprintln(os.Stderr, err)
 			return
 		}
 
-		fmt.Println("Key:", key, "successful locked!")
+		lock := &Lock{}
+		key := "ObjectID:123456"
+		ttl := time.Minute
 
-		// Do something alone. Sleep, for example. ;-)
-		time.Sleep(time.Millisecond)
-
-		// Try to unlock the key
-		err = nm.Unlock(lock)
+		// Try to lock key
+		err = nm.Lock(retries, timeout, lock, key, ttl)
 		if err != nil {
-			fmt.Println("Error while unlock key:", key, "error:", err, ".")
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+
+		var done uint32
+
+		// run heartbeat in background
+		go func() {
+			heartbeatTimeout := 6 * time.Second // much less than `ttl`
+			heartbeatRetries := 1
+
+			for atomic.LoadUint32(&done) == 0 {
+				// Try to update lock TTL
+				err = nm.Update(heartbeatRetries, timeout, lock, ttl)
+				if err == ErrDisconnected || err == ErrWrongTTL || err == ErrNoServers {
+					return
+				} else if err == ErrIsolated {
+					os.Exit(1)
+				} else if err == ErrTooMuchRetries {
+					continue
+				} else if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return
+				}
+
+				time.Sleep(heartbeatTimeout)
+			}
+		}()
+
+		// do something under the lock
+
+		// stop heartbeat
+		atomic.StoreUint32(&done, 1)
+
+		// Try to unlock lock
+		err = nm.Unlock(retries, timeout, lock)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+
+		// Cloce connection
+		err = nm.Close(retries, timeout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			return
 		}
 	}
-
-## Performance
-
-	$ cd $GOPATH/src/github.com/MichaelMonashev/sync/netmutex
-	$ go test -v -benchmem -benchtime="20s" -bench="."
-	...
-	BenchmarkLock-8      	500000	 62164 ns/op	153 B/op	 6 allocs/op
-	BenchmarkLockUnlock-8	200000	135380 ns/op	211 B/op	10 allocs/op
-
-Mock server produce all memory allocations.

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Example() error {
+func Example() {
 
 	retries := 10
 	timeout := 60 * time.Second
@@ -17,7 +17,8 @@ func Example() error {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return err
+		fmt.Fprintln(os.Stderr, err)
+		return
 	}
 
 	options := &Options{
@@ -28,17 +29,19 @@ func Example() error {
 	// Open connection to a lock-server
 	nm, err := Open(retries, timeout, addresses, options)
 	if err != nil {
-		return err
+		fmt.Fprintln(os.Stderr, err)
+		return
 	}
 
 	lock := &Lock{}
-	key := "Key:123456"
+	key := "ObjectID:123456"
 	ttl := time.Minute
 
 	// Try to lock key
 	err = nm.Lock(retries, timeout, lock, key, ttl)
 	if err != nil {
-		return err
+		fmt.Fprintln(os.Stderr, err)
+		return
 	}
 
 	var done uint32
@@ -74,9 +77,14 @@ func Example() error {
 	// Try to unlock lock
 	err = nm.Unlock(retries, timeout, lock)
 	if err != nil {
-		return err
+		fmt.Fprintln(os.Stderr, err)
+		return
 	}
 
 	// Cloce connection
-	return nm.Close(retries, timeout)
+	err = nm.Close(retries, timeout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 }
