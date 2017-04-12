@@ -87,7 +87,7 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 
 	nm := &NetMutex{
 		done:            make(chan struct{}),
-		workingCommands: NewWorkingCommands(),
+		workingCommands: newWorkingCommands(),
 	}
 
 	isolationInfo := ""

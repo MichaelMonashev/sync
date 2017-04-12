@@ -121,7 +121,7 @@ func TestCommandId(t *testing.T) {
 func TestConnect1(t *testing.T) {
 	netmutex := &NetMutex{
 		done:            make(chan struct{}),
-		workingCommands: NewWorkingCommands(),
+		workingCommands: newWorkingCommands(),
 	}
 
 	options, err := netmutex.connect("127.0.0.1:3001", time.Minute, "")
@@ -142,7 +142,7 @@ func TestConnect1(t *testing.T) {
 func TestConnect2(t *testing.T) {
 	netmutex := &NetMutex{
 		done:            make(chan struct{}),
-		workingCommands: NewWorkingCommands(),
+		workingCommands: newWorkingCommands(),
 	}
 
 	_, err := netmutex.connect("127.0.0.1:3004", time.Second, "")

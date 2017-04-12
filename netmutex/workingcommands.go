@@ -15,7 +15,7 @@ type busket struct {
 	m map[commandID]*request
 }
 
-func NewWorkingCommands() *workingCommands {
+func newWorkingCommands() *workingCommands {
 	wc := &workingCommands{}
 
 	for i := len(wc.a) - 1; i >= 0; i-- {
