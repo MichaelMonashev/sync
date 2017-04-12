@@ -86,10 +86,8 @@ type NetMutex struct {
 func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutex, error) {
 
 	nm := &NetMutex{
-		done: make(chan struct{}),
-		workingCommands: &workingCommands{
-			m: make(map[commandID]*request),
-		},
+		done:            make(chan struct{}),
+		workingCommands: NewWorkingCommands(),
 	}
 
 	isolationInfo := ""

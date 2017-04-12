@@ -120,10 +120,8 @@ func TestCommandId(t *testing.T) {
 // normal operation
 func TestConnect1(t *testing.T) {
 	netmutex := &NetMutex{
-		done: make(chan struct{}),
-		workingCommands: &workingCommands{
-			m: make(map[commandID]*request),
-		},
+		done:            make(chan struct{}),
+		workingCommands: NewWorkingCommands(),
 	}
 
 	options, err := netmutex.connect("127.0.0.1:3001", time.Minute, "")
@@ -143,10 +141,8 @@ func TestConnect1(t *testing.T) {
 // соединиться с несуществующим сервером
 func TestConnect2(t *testing.T) {
 	netmutex := &NetMutex{
-		done: make(chan struct{}),
-		workingCommands: &workingCommands{
-			m: make(map[commandID]*request),
-		},
+		done:            make(chan struct{}),
+		workingCommands: NewWorkingCommands(),
 	}
 
 	_, err := netmutex.connect("127.0.0.1:3004", time.Second, "")
