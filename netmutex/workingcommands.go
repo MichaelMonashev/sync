@@ -7,7 +7,7 @@ import (
 const workingCommandsSize = 16 // степь двойки . размер массива: 1 << 16 = 65536
 
 type workingCommands struct {
-	a [1 << workingCommandsSize]busket
+	a [1 << workingCommandsSize]*busket
 }
 
 type busket struct {
@@ -19,10 +19,10 @@ func NewWorkingCommands() *workingCommands {
 	wc := &workingCommands{}
 
 	for i := len(wc.a) - 1; i >= 0; i-- {
-		//		wc.a[i] = &busket{
-		//			m: make(map[commandID]*request),
-		//		}
-		wc.a[i].m = make(map[commandID]*request)
+		wc.a[i] = &busket{
+			m: make(map[commandID]*request),
+		}
+		//wc.a[i].m = make(map[commandID]*request)
 	}
 
 	return wc
