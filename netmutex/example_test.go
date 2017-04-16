@@ -33,12 +33,12 @@ func Example() {
 		return
 	}
 
-	lock := &Lock{}
+	l := nm.NewLock()
 	key := "ObjectID:123456"
 	ttl := time.Minute
 
 	// Try to lock key
-	err = nm.Lock(retries, timeout, lock, key, ttl)
+	err = l.Lock(retries, timeout, key, ttl)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -53,7 +53,7 @@ func Example() {
 
 		for atomic.LoadUint32(&done) == 0 {
 			// Try to update lock TTL
-			err = nm.Update(heartbeatRetries, timeout, lock, ttl)
+			err = l.Update(heartbeatRetries, timeout, ttl)
 			if err == ErrDisconnected || err == ErrWrongTTL || err == ErrNoServers {
 				return
 			} else if err == ErrIsolated {
@@ -75,7 +75,7 @@ func Example() {
 	atomic.StoreUint32(&done, 1)
 
 	// Try to unlock lock
-	err = nm.Unlock(retries, timeout, lock)
+	err = l.Unlock(retries, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

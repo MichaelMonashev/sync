@@ -164,17 +164,17 @@ func TestLock1(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	lock := &Lock{}
+	l := nm.NewLock()
 	key := "test"
 
 	for i := 1000; i > 0; i-- {
-		err := nm.Lock(retries, timeout, lock, key, ttl)
+		err := l.Lock(retries, timeout, key, ttl)
 
 		if err != nil {
 			t.Fatal("can't lock", err)
 		}
 
-		err = nm.Unlock(retries, timeout, lock)
+		err = l.Unlock(retries, timeout)
 
 		if err != nil {
 			t.Fatal("can't unlock", err)
@@ -193,10 +193,10 @@ func TestLock2(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	lock := &Lock{}
+	l := nm.NewLock()
 	badKey := strings.Repeat("a", 300)
 
-	err = nm.Lock(retries, timeout, lock, badKey, ttl)
+	err = l.Lock(retries, timeout, badKey, ttl)
 
 	if err == nil {
 		t.Fatal("must be error")
@@ -217,22 +217,22 @@ func TestLockUpdate(t *testing.T) {
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	lock := &Lock{}
+	l := nm.NewLock()
 	key := "a"
 
-	err = nm.Lock(retries, timeout, lock, key, ttl)
+	err = l.Lock(retries, timeout, key, ttl)
 
 	if err != nil {
 		t.Fatal("can't lock", err)
 	}
 
-	err = nm.Update(retries, timeout, lock, ttl)
+	err = l.Update(retries, timeout, ttl)
 
 	if err != nil {
 		t.Fatal("can't update", err)
 	}
 
-	err = nm.Unlock(retries, timeout, lock)
+	err = l.Unlock(retries, timeout)
 
 	if err != nil {
 		t.Fatal("can't unlock", err)
@@ -314,22 +314,20 @@ func BenchmarkParallel(b *testing.B) {
 		retries := 10
 		timeout := time.Minute
 		ttl := time.Second
-		lock := &Lock{}
+		l := nm.NewLock()
 		key := "a"
 		i := 0
 
 		for pb.Next() {
 			i++
 
-			nm.Lock(retries, timeout, lock, fmt.Sprint(key, "_", i), ttl)
+			l.Lock(retries, timeout, fmt.Sprint(key, "_", i), ttl)
 
 			for i := 0; i < 8; i++ {
-				nm.Update(retries, timeout, lock, ttl)
+				l.Update(retries, timeout, ttl)
 			}
 
-			if lock != nil {
-				nm.Unlock(retries, timeout, lock)
-			}
+			l.Unlock(retries, timeout)
 		}
 	})
 }
