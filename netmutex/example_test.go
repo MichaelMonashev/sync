@@ -69,12 +69,12 @@ func Example() {
 		}
 	}()
 
-	// do something under the lock
+	// DO SOMETHING UNDER THE LOCK
 
 	// stop heartbeat
 	atomic.StoreUint32(&done, 1)
 
-	// Try to unlock lock
+	// Try to unlock key
 	err = l.Unlock(retries, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
