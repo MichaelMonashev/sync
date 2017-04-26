@@ -1,4 +1,4 @@
-// Package netmutex implements low-level high performance client library for lock server.
+// Package netmutex implements low-level high performance client library for Taooka lock server (http://taooka.com/).
 // Очень важно корректно обрабатывать ошибки, которые возвращают функции.
 package netmutex
 
@@ -76,7 +76,7 @@ func (nm *NetMutex) NewLock() *Lock {
 
 // Options задаёт дополнительные параметры соединения.
 type Options struct {
-	IsolationInfo string // Информация о том, как в случае неработоспособности будет изолироваться клиент.
+	IsolationInfo string // Информация о том, как в случае неработоспособности клиент будет изолироваться от окружающего мира.
 }
 
 // NetMutex реализует блокировки по сети.

@@ -1,6 +1,6 @@
 # sync/netmutex - Go client to lock server
 
-Low-level high-performance Golang client library for lock server.
+Low-level high-performance Golang client library for [Taooka lock server](https://taooka.org/) .
 
 [![GoDoc](https://godoc.org/github.com/MichaelMonashev/sync/netmutex?status.svg)](https://godoc.org/github.com/MichaelMonashev/sync/netmutex)
 [![Go Report Card](https://goreportcard.com/badge/github.com/MichaelMonashev/sync/netmutex)](https://goreportcard.com/report/github.com/MichaelMonashev/sync/netmutex)
@@ -42,7 +42,7 @@ $ godoc github.com/MichaelMonashev/sync/netmutex
 
 Steps:
 
- - connect to server
+ - connect to lock server
  - lock key
  - execute critical section
  - unlock key
