@@ -26,7 +26,7 @@ func Example() {
 		IsolationInfo: fmt.Sprintf("Hostname: %s\nPid: %d", hostname, os.Getpid()),
 	}
 
-	// Open connection to a Taooka lock server
+	// Open connection to a Taooka lock server (http://taooka.com/)
 	nm, err := Open(retries, timeout, addresses, options)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
