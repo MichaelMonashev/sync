@@ -1,7 +1,10 @@
+# golang library for http://taooka.com/
+
 language: go
 
 go:
 - tip
+- 1.8.1
 - 1.8
 - 1.7.5
 - 1.7.4
