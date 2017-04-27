@@ -1,3 +1,5 @@
+# golang library for http://taooka.com/
+
 version: "{build}"
 
 clone_folder: c:\gopath\src\github.com\MichaelMonashev\sync
