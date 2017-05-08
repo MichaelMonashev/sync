@@ -1,4 +1,4 @@
-// Package netmutex implements low-level high performance client library for Taooka lock server (http://taooka.com/).
+// Package netmutex implements low-level high performance client library for Taooka distributed lock manager (http://taooka.com/).
 // It is very important to correctly handle errors that return functions!!!
 package netmutex
 
