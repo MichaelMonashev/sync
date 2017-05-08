@@ -1,5 +1,5 @@
 // Package netmutex implements low-level high performance client library for Taooka lock server (http://taooka.com/).
-// Очень важно корректно обрабатывать ошибки, которые возвращают функции.
+// It is very important to correctly handle errors that return functions!!!
 package netmutex
 
 import (
@@ -12,39 +12,39 @@ import (
 	"github.com/MichaelMonashev/sync/netmutex/code"
 )
 
-// Ограничения на размер передаваемых в команды данных.
+// Size limits.
 const (
-	// MaxKeySize - максимальная допустимая длина ключа.
+	// MaxKeySize - maximum key size.
 	MaxKeySize = 255
 
-	// MaxIsolationInfo - максимальная допустимая длина информации для изоляции клиента в случае его неработоспособности.
+	// MaxIsolationInfo - maximum length of information for client isolation. Taooka passes it to STDIN of "isolate" programm while client broken.
 	MaxIsolationInfo = 400
 )
 
-// Коды возвращаемых ошибок.
+// Returned errors.
 var (
-	// ErrDisconnected - cоединение было закрыто ранее.
+	// ErrDisconnected - the connection was closed.
 	ErrDisconnected = errors.New("Client connection had closed.")
 
-	// ErrIsolated - клиент был изолирован. Нужно завершить работу с программы.
+	// ErrIsolated - the client was isolated. You need to quit the program.
 	ErrIsolated = errors.New("Client had isolated.")
 
-	// ErrLocked - ключ заблокирован кем-то другим.
+	// ErrLocked - the key was locked by someone else.
 	ErrLocked = errors.New("Key locked.")
 
-	// ErrNoServers - не удалось подключиться ни к одному серверу из списка или все они стали недоступны.
+	// ErrNoServers - could not connect to any server from the list or all of them became unavailable.
 	ErrNoServers = errors.New("No working servers.")
 
-	// ErrTooMuchRetries - превышено количество попыток отправить команду на сервер.
+	// ErrTooMuchRetries - the number of attempts to send a command to the server has been exceeded.
 	ErrTooMuchRetries = errors.New("Too much retries.")
 
-	// ErrLongKey - ключ длиннее MaxKeySize байт.
+	// ErrLongKey - the key is longer than MaxKeySize bytes.
 	ErrLongKey = errors.New("Key too long.")
 
-	// ErrWrongTTL - TTL меньше нуля.
+	// ErrWrongTTL - TTL is less than zero.
 	ErrWrongTTL = errors.New("Wrong TTL.")
 
-	// ErrLongIsolationInfo - информация для изоляции клиента длиннее MaxIsolationInfo байт.
+	// ErrLongIsolationInfo - information for client isolation is longer than MaxIsolationInfo bytes.
 	ErrLongIsolationInfo = errors.New("Client isolation information too long.")
 )
 
@@ -59,7 +59,7 @@ type servers struct {
 	current *server
 }
 
-// Lock — это блокировка.
+// Lock — lock object.
 type Lock struct {
 	key       string
 	commandID commandID
@@ -67,19 +67,19 @@ type Lock struct {
 	nm        *NetMutex
 }
 
-// NewLock возвращает блокировку
+// NewLock return new lock object.
 func (nm *NetMutex) NewLock() *Lock {
 	return &Lock{
 		nm: nm,
 	}
 }
 
-// Options задаёт дополнительные параметры соединения.
+// Options specifies additional connection parameters.
 type Options struct {
-	IsolationInfo string // Информация о том, как в случае неработоспособности клиент будет изолироваться от окружающего мира.
+	IsolationInfo string // Information about how the client will be isolated from the data it is changing in case of non-operation.
 }
 
-// NetMutex реализует блокировки по сети.
+// NetMutex implements network locks.
 type NetMutex struct {
 	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	done            chan struct{}
@@ -87,10 +87,7 @@ type NetMutex struct {
 	workingCommands *workingCommands
 }
 
-// Open пытается за время timeout соединиться с любым сервером из списка addrs,
-// получить с него актуальный список серверов, используя параметры options.
-// Если не получается, то повторяет обход retries раз.
-// Если получается, то пытается открыть соединение с каждым сервером из полученного списка серверов.
+// Open tries during timeout to connect to any server from the list of addrs, get the current list of servers from it using options. If not, then repeat the bypass retries once. If so, then it tries to open a connection to each server from the list of servers received.
 func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutex, error) {
 
 	nm := &NetMutex{
@@ -163,7 +160,7 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 	return nil, ErrNoServers
 }
 
-// Lock пытается заблокировать ключ key, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout. Если блокировка удалась, то она записывается в l.
+// Lock tries to lock the key, making no more retries of attempts, during each waiting for a response from the server during the timeout. If the lock succeeds, it is written to l.
 func (l *Lock) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) error {
 
 	if l.nm == nil {
@@ -195,9 +192,7 @@ func (l *Lock) Lock(retries int, timeout time.Duration, key string, ttl time.Dur
 
 }
 
-// Update пытается у блокировки l обновить ttl, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
-// Позволяет продлять время жизни блокировки.
-// Подходит для реализации heartbeat-а, позволяющего оптимальнее управлять ttl ключа.
+// Update tries to update the ttl of the l lock, making no more retries of attempts, during each waiting for a response from the server during the timeout. Allows you to extend the lifetime of the lock. Suitable for the implementation of heartbeat, which allows optimal control of the ttl key.
 func (l *Lock) Update(retries int, timeout time.Duration, ttl time.Duration) error {
 	if l.nm == nil {
 		return errWrongLock
@@ -216,7 +211,7 @@ func (l *Lock) Update(retries int, timeout time.Duration, ttl time.Duration) err
 	return nm.runCommand(l.key, nm.commandID(), code.UPDATE, timeout, ttl, l.commandID, retries)
 }
 
-// Unlock пытается снять блокировку l, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
+//Unlock tries to unlock l, making no more retries of attempts, during each waiting for a response from the server during the timeout.
 func (l *Lock) Unlock(retries int, timeout time.Duration) error {
 	if l.nm == nil {
 		return errWrongLock
@@ -231,13 +226,13 @@ func (l *Lock) Unlock(retries int, timeout time.Duration) error {
 	return nm.runCommand(l.key, nm.commandID(), code.UNLOCK, l.timeout, 0, l.commandID, retries)
 }
 
-// UnlockAll пытается снять все блокировки, сделав не более retries попыток, в течении каждой ожидая ответа от сервера в течении timeout.
-// Использовать с осторожностью!!! Клиенты, у которых блокировки установлены, изолируются!
+//UnlockAll tries to remove all locks by making no more retries of attempts, during each waiting for a response from the server during the timeout.
+//Use with caution! Clients with existing locks will be isolated!
 func (nm *NetMutex) UnlockAll(retries int, timeout time.Duration) error {
 	return nm.runCommand("", nm.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
 }
 
-// Close закрывает соединение с сервером блокировок. Нужно только для сервера, чтобы он мог сразу удалить из памяти информацию о соединении, а не по таймауту.
+// Close closes the connection to the lock server.
 func (nm *NetMutex) Close(retries int, timeout time.Duration) error {
 	defer close(nm.done)
 	return nm.runCommand("", nm.commandID(), code.DISCONNECT, timeout, 0, commandID{}, retries)

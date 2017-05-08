@@ -1,38 +1,37 @@
 // Package code contain commands for clent-server interaction.
 package code
 
-// коды запросов от клиентов
+// Client request codes:
 const (
-	CONNECT    = iota // запрос номера ноды и номера соединения
-	PING              // запрос для проверки прохождения пакетов до сервера
-	TOUCH             // запрос для обновления времени последней активности клиента
-	DISCONNECT        // запрос на отсоединение
+	CONNECT    = iota // requesting connection parameters
+	PING              // checking the passing of packets to the server and back
+	TOUCH             // updates the time of the last client activity
+	DISCONNECT        // request to disconnect
 
-	LOCK      // запрос заблокировать ключ
-	RLOCK     // запрос заблокировать ключ на чтение
-	UPDATE    // запрос обновить информацию о заблокированном ключе
-	UNLOCK    // запрос снять блокировку с ранее заблокированного ключа
-	UNLOCKALL // запрос снять все блокировки
+	LOCK      // lock the key
+	RLOCK     // lock the key for writing
+	UPDATE    // update the key ttl
+	UNLOCK    // urlock the key
+	UNLOCKALL // remove all locks
 )
 
-// коды ответов клиентам
+// server answers
 const (
-	OPTIONS = iota // ответ на CONNECT-запрос. Содержит номер сервера, номер соединения с ней и список всех серверов, если их несколько.
-	PONG           // ответ на PING-запрос
+	OPTIONS = iota // contain connection parameters
+	PONG           // response to the PING request
 
-	// коды ответов на DISCONNECT, TOUCH, LOCK, UPDATE, UNLOCK и UNLOCKALL
-	OK           // ответ: всё хорошо
-	DISCONNECTED // ответ: клиент давно не делал запросы, его данные проэкспайрились, и поэтому ему нужно снова соединиться
-	ISOLATED     // ответ: клиент был изолирован сервером. Ему нужно перестать работать с данными
-	LOCKED       // ответ: ключ заблокирован кем-то ещё
-	WORKING      // ответ: запрос обрабатывается (т.е. клиенту надо обновить таймаут на ожидание ответа);
-	REDIRECT     // ответ: повторить запрос на другую ноду
-	ERROR        // ответ: ошибка
+	OK           // request done
+	DISCONNECTED // the client was disconnected before the request
+	ISOLATED     // the client was isolated. You need to quit the program
+	LOCKED       // key was locked by someone else
+	WORKING      // the request is processed and the response will be sent later
+	REDIRECT     // repeat request to another server
+	ERROR        // error with descroption
 )
 
-// флаги транспортного уровня
+// flags of transport level
 const (
-	FRAGMENTED    = 1 << iota // один из нескольких фрагментов
-	LAST_FRAGMENT             // последний фрагмент
-	BUSY                      // сервер перегружен, присылайте меньше запросов
+	FRAGMENTED    = 1 << iota // one of several fragments
+	LAST_FRAGMENT             // last fragment
+	BUSY                      // server is overloaded, send fewer requests
 )

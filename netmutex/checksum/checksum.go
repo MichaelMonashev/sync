@@ -1,4 +1,4 @@
-// Package checksum считает контрольную сумму.
+// Package checksum calculates the checksum.
 package checksum
 
 import (
