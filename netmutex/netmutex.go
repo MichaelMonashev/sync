@@ -63,12 +63,11 @@ type servers struct {
 type Mutex struct {
 	key       string
 	commandID commandID
-	timeout   time.Duration
-	conn      *NetMutexConn
+	conn      *Conn
 }
 
 // NewMutex return new mutex object.
-func (conn *NetMutexConn) NewMutex() *Mutex {
+func (conn *Conn) NewMutex() *Mutex {
 	return &Mutex{
 		conn: conn,
 	}
@@ -79,8 +78,8 @@ type Options struct {
 	IsolationInfo string // Information about how the client will be isolated from the data it is changing in case of non-operation.
 }
 
-// NetMutexConn — connection to the distributed lock manager.
-type NetMutexConn struct {
+// Conn — connection to the distributed lock manager.
+type Conn struct {
 	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	done            chan struct{}
 	servers         *servers
@@ -88,9 +87,9 @@ type NetMutexConn struct {
 }
 
 // Open tries during timeout to connect to any server from the list of addrs, get the current list of servers from it using options. If not, then repeat the bypass retries once. If so, then it tries to open a connection to each server from the list of servers received.
-func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutexConn, error) {
+func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*Conn, error) {
 
-	conn := &NetMutexConn{
+	conn := &Conn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
@@ -186,7 +185,6 @@ func (m *Mutex) Lock(retries int, timeout time.Duration, key string, ttl time.Du
 
 	m.key = key
 	m.commandID = id
-	m.timeout = timeout
 
 	return nil
 
@@ -223,22 +221,22 @@ func (m *Mutex) Unlock(retries int, timeout time.Duration) error {
 
 	conn := m.conn
 
-	return conn.runCommand(m.key, conn.commandID(), code.UNLOCK, m.timeout, 0, m.commandID, retries)
+	return conn.runCommand(m.key, conn.commandID(), code.UNLOCK, timeout, 0, m.commandID, retries)
 }
 
 //UnlockAll tries to remove all locks by making no more retries of attempts, during each waiting for a response from the server during the timeout.
 //Use with caution! Clients with existing locks will be isolated!
-func (conn *NetMutexConn) UnlockAll(retries int, timeout time.Duration) error {
+func (conn *Conn) UnlockAll(retries int, timeout time.Duration) error {
 	return conn.runCommand("", conn.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
 }
 
 // Close closes the connection to the distributed lock manager.
-func (conn *NetMutexConn) Close(retries int, timeout time.Duration) error {
+func (conn *Conn) Close(retries int, timeout time.Duration) error {
 	defer close(conn.done)
 	return conn.runCommand("", conn.commandID(), code.DISCONNECT, timeout, 0, commandID{}, retries)
 }
 
-func (conn *NetMutexConn) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
+func (conn *Conn) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
 
 	command := getRequest()
 	defer putRequest(command)
@@ -260,7 +258,7 @@ func (conn *NetMutexConn) runCommand(key string, id commandID, code byte, timeou
 	return <-command.respChan
 }
 
-func (conn *NetMutexConn) touch(s *server) {
+func (conn *Conn) touch(s *server) {
 	command := getRequest()
 	defer putRequest(command)
 
@@ -283,7 +281,7 @@ func (conn *NetMutexConn) touch(s *server) {
 }
 
 //  горутины (по числу серверов) читают ответы из своих соединений и направляют их в канал ответов
-func (conn *NetMutexConn) readResponses(s *server) {
+func (conn *Conn) readResponses(s *server) {
 
 	go conn.touch(s)
 
@@ -346,7 +344,7 @@ func (conn *NetMutexConn) readResponses(s *server) {
 }
 
 // пытается открыть соединение
-func (conn *NetMutexConn) repairConn(server *server) {
+func (conn *Conn) repairConn(server *server) {
 	for {
 		select {
 		case <-conn.done:
@@ -370,7 +368,7 @@ func (conn *NetMutexConn) repairConn(server *server) {
 	}
 }
 
-func (conn *NetMutexConn) connect(addr string, timeout time.Duration, isolationInfo string) (*response, error) {
+func (conn *Conn) connect(addr string, timeout time.Duration, isolationInfo string) (*response, error) {
 	c, err := openConn(addr)
 	if err != nil {
 		return nil, err
@@ -406,7 +404,7 @@ func (conn *NetMutexConn) connect(addr string, timeout time.Duration, isolationI
 	return resp, nil
 }
 
-func (conn *NetMutexConn) ping(s *server, timeout time.Duration) error {
+func (conn *Conn) ping(s *server, timeout time.Duration) error {
 	req := &request{
 		code: code.PING,
 		id:   conn.commandID(),
@@ -429,7 +427,7 @@ func (conn *NetMutexConn) ping(s *server, timeout time.Duration) error {
 	return nil
 }
 
-func (conn *NetMutexConn) commandID() commandID {
+func (conn *Conn) commandID() commandID {
 	return commandID{
 		connectionID: conn.nextCommandID.connectionID,
 		requestID:    atomic.AddUint64(&conn.nextCommandID.requestID, 1),
@@ -437,7 +435,7 @@ func (conn *NetMutexConn) commandID() commandID {
 }
 
 // возвращает лучший из возможных серверов
-func (conn *NetMutexConn) server() (*server, error) {
+func (conn *Conn) server() (*server, error) {
 	conn.servers.Lock()
 	defer conn.servers.Unlock()
 
@@ -484,7 +482,7 @@ func (conn *NetMutexConn) server() (*server, error) {
 	return nil, ErrNoServers
 }
 
-func (conn *NetMutexConn) serverByID(serverID uint64) *server {
+func (conn *Conn) serverByID(serverID uint64) *server {
 	conn.servers.Lock()
 	defer conn.servers.Unlock()
 

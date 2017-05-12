@@ -119,7 +119,7 @@ func TestCommandId(t *testing.T) {
 
 // normal operation
 func TestConnect1(t *testing.T) {
-	conn := &NetMutexConn{
+	conn := &Conn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
@@ -140,7 +140,7 @@ func TestConnect1(t *testing.T) {
 
 // соединиться с несуществующим сервером
 func TestConnect2(t *testing.T) {
-	conn := &NetMutexConn{
+	conn := &Conn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
