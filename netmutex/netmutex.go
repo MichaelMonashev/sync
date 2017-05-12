@@ -79,7 +79,7 @@ type Options struct {
 	IsolationInfo string // Information about how the client will be isolated from the data it is changing in case of non-operation.
 }
 
-// NetMutexConn connection to lock server.
+// NetMutexConn — connection to distributed lock manager.
 type NetMutexConn struct {
 	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	done            chan struct{}
