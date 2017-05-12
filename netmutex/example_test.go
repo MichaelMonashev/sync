@@ -27,18 +27,18 @@ func Example() {
 	}
 
 	// Open connection to a Taooka lock server (http://taooka.com/)
-	nm, err := Open(retries, timeout, addresses, options)
+	conn, err := Open(retries, timeout, addresses, options)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
-	l := nm.NewLock()
+	mutex := conn.NewMutex()
 	key := "ObjectID:123456"
 	ttl := time.Minute
 
 	// Try to lock key
-	err = l.Lock(retries, timeout, key, ttl)
+	err = mutex.Lock(retries, timeout, key, ttl)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -53,7 +53,7 @@ func Example() {
 
 		for atomic.LoadUint32(&done) == 0 {
 			// Try to update lock TTL
-			err = l.Update(heartbeatRetries, timeout, ttl)
+			err = mutex.Update(heartbeatRetries, timeout, ttl)
 			if err == ErrDisconnected || err == ErrWrongTTL || err == ErrNoServers {
 				return
 			} else if err == ErrIsolated {
@@ -75,14 +75,14 @@ func Example() {
 	atomic.StoreUint32(&done, 1)
 
 	// Try to unlock key
-	err = l.Unlock(retries, timeout)
+	err = mutex.Unlock(retries, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
 	// Cloce connection
-	err = nm.Close(retries, timeout)
+	err = conn.Close(retries, timeout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

@@ -27,7 +27,7 @@ type request struct {
 	sendChan      chan *server   // канал, в который пишется сервер, на который надо послать запрос
 	done          chan struct{}  // канал, закрытие которого извещает о завершении работы
 	processChan   chan *response // канал, в который пишется ответ от сервера, который надо обработать
-	netmutex      *NetMutex      // ссылка на клиента для чтения списка серверов и retries
+	conn          *NetMutexConn  // ссылка на клиента для чтения списка серверов и retries
 	currentServer *server        // сервер, который обработывает текущий запрос
 	timer         *time.Timer    // таймер текущего запроса
 	retries       int            // количество запросов к серверам, прежде чем вернуть ошибку
@@ -213,7 +213,7 @@ func (req *request) run() {
 
 	for {
 		select {
-		case <-req.netmutex.done:
+		case <-req.conn.done:
 			return
 
 		case server := <-req.sendChan:
@@ -241,7 +241,7 @@ func (req *request) send(server *server) {
 
 	for {
 		if server == nil {
-			server, err = req.netmutex.server()
+			server, err = req.conn.server()
 			if err != nil { // некуда отправлять команду, поэтому сразу возвращаем ошибку
 				req.done <- struct{}{}
 				req.respChan <- err
@@ -313,7 +313,7 @@ func (req *request) process(resp *response) bool {
 		if req.isEnoughRetries() {
 			req.respChan <- ErrTooMuchRetries
 		} else {
-			req.sendChan <- req.netmutex.serverByID(resp.serverID)
+			req.sendChan <- req.conn.serverByID(resp.serverID)
 			return false
 		}
 

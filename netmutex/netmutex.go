@@ -50,7 +50,7 @@ var (
 
 var (
 	errWrongResponse = errors.New("Wrong response.")
-	errWrongLock     = errors.New("Use l := nm.NewLock() instead of l := &Lock{}.")
+	errWrongLock     = errors.New("Use m := conn.NewMutex() instead of m := &Mutex{}.")
 )
 
 type servers struct {
@@ -59,18 +59,18 @@ type servers struct {
 	current *server
 }
 
-// Lock — lock object.
-type Lock struct {
+// Mutex — mutex object.
+type Mutex struct {
 	key       string
 	commandID commandID
 	timeout   time.Duration
-	nm        *NetMutex
+	conn      *NetMutexConn
 }
 
-// NewLock return new lock object.
-func (nm *NetMutex) NewLock() *Lock {
-	return &Lock{
-		nm: nm,
+// NewMutex return new mutex object.
+func (conn *NetMutexConn) NewMutex() *Mutex {
+	return &Mutex{
+		conn: conn,
 	}
 }
 
@@ -79,8 +79,8 @@ type Options struct {
 	IsolationInfo string // Information about how the client will be isolated from the data it is changing in case of non-operation.
 }
 
-// NetMutex implements network locks.
-type NetMutex struct {
+// NetMutexConn connection to lock server.
+type NetMutexConn struct {
 	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	done            chan struct{}
 	servers         *servers
@@ -88,9 +88,9 @@ type NetMutex struct {
 }
 
 // Open tries during timeout to connect to any server from the list of addrs, get the current list of servers from it using options. If not, then repeat the bypass retries once. If so, then it tries to open a connection to each server from the list of servers received.
-func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutex, error) {
+func Open(retries int, timeout time.Duration, addrs []string, options *Options) (*NetMutexConn, error) {
 
-	nm := &NetMutex{
+	conn := &NetMutexConn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
@@ -107,11 +107,11 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 	// обходим все сервера из списка, пока не найдём доступный
 	for i := 0; i < retries; i++ {
 		for _, addr := range addrs {
-			resp, err := nm.connect(addr, timeout, isolationInfo)
+			resp, err := conn.connect(addr, timeout, isolationInfo)
 			if err != nil {
 				continue
 			}
-			nm.nextCommandID = resp.id
+			conn.nextCommandID = resp.id
 
 			remoteServers := make(map[uint64]*server)
 
@@ -133,37 +133,37 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 					continue
 				}
 
-				err = nm.ping(s, timeout)
+				err = conn.ping(s, timeout)
 				if err != nil {
 					s.fail()
 				}
 			}
 
-			nm.servers = &servers{
+			conn.servers = &servers{
 				m: remoteServers,
 			}
 
 			// запускаем горутины, ждущие ответов от каждого сервера
-			for _, server := range nm.servers.m {
+			for _, server := range conn.servers.m {
 
 				if server.conn != nil {
-					go nm.readResponses(server)
+					go conn.readResponses(server)
 				} else {
-					go nm.repairConn(server)
+					go conn.repairConn(server)
 				}
 			}
 
-			return nm, nil
+			return conn, nil
 		}
 	}
 
 	return nil, ErrNoServers
 }
 
-// Lock tries to lock the key, making no more retries of attempts, during each waiting for a response from the server during the timeout. If the lock succeeds, it is written to l.
-func (l *Lock) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) error {
+// Lock tries to lock the key, making no more retries of attempts, during each waiting for a response from the server during the timeout. If the lock succeeds, it is written to m.
+func (m *Mutex) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) error {
 
-	if l.nm == nil {
+	if m.conn == nil {
 		return errWrongLock
 	}
 
@@ -175,30 +175,30 @@ func (l *Lock) Lock(retries int, timeout time.Duration, key string, ttl time.Dur
 		return ErrWrongTTL
 	}
 
-	nm := l.nm
+	conn := m.conn
 
-	id := nm.commandID()
+	id := conn.commandID()
 
-	err := nm.runCommand(key, id, code.LOCK, timeout, ttl, commandID{}, retries)
+	err := conn.runCommand(key, id, code.LOCK, timeout, ttl, commandID{}, retries)
 	if err != nil {
 		return err
 	}
 
-	l.key = key
-	l.commandID = id
-	l.timeout = timeout
+	m.key = key
+	m.commandID = id
+	m.timeout = timeout
 
 	return nil
 
 }
 
-// Update tries to update the ttl of the l lock, making no more retries of attempts, during each waiting for a response from the server during the timeout. Allows you to extend the lifetime of the lock. Suitable for the implementation of heartbeat, which allows optimal control of the ttl key.
-func (l *Lock) Update(retries int, timeout time.Duration, ttl time.Duration) error {
-	if l.nm == nil {
+// Update tries to update the ttl of the m mutex, making no more retries of attempts, during each waiting for a response from the server during the timeout. Allows you to extend the lifetime of the lock. Suitable for the implementation of heartbeat, which allows optimal control of the ttl key.
+func (m *Mutex) Update(retries int, timeout time.Duration, ttl time.Duration) error {
+	if m.conn == nil {
 		return errWrongLock
 	}
 
-	if len(l.key) > MaxKeySize {
+	if len(m.key) > MaxKeySize {
 		return ErrLongKey
 	}
 
@@ -206,39 +206,39 @@ func (l *Lock) Update(retries int, timeout time.Duration, ttl time.Duration) err
 		return ErrWrongTTL
 	}
 
-	nm := l.nm
+	conn := m.conn
 
-	return nm.runCommand(l.key, nm.commandID(), code.UPDATE, timeout, ttl, l.commandID, retries)
+	return conn.runCommand(m.key, conn.commandID(), code.UPDATE, timeout, ttl, m.commandID, retries)
 }
 
-//Unlock tries to unlock l, making no more retries of attempts, during each waiting for a response from the server during the timeout.
-func (l *Lock) Unlock(retries int, timeout time.Duration) error {
-	if l.nm == nil {
+//Unlock tries to unlock m, making no more retries of attempts, during each waiting for a response from the server during the timeout.
+func (m *Mutex) Unlock(retries int, timeout time.Duration) error {
+	if m.conn == nil {
 		return errWrongLock
 	}
 
-	if len(l.key) > MaxKeySize {
+	if len(m.key) > MaxKeySize {
 		return ErrLongKey
 	}
 
-	nm := l.nm
+	conn := m.conn
 
-	return nm.runCommand(l.key, nm.commandID(), code.UNLOCK, l.timeout, 0, l.commandID, retries)
+	return conn.runCommand(m.key, conn.commandID(), code.UNLOCK, m.timeout, 0, m.commandID, retries)
 }
 
 //UnlockAll tries to remove all locks by making no more retries of attempts, during each waiting for a response from the server during the timeout.
 //Use with caution! Clients with existing locks will be isolated!
-func (nm *NetMutex) UnlockAll(retries int, timeout time.Duration) error {
-	return nm.runCommand("", nm.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
+func (conn *NetMutexConn) UnlockAll(retries int, timeout time.Duration) error {
+	return conn.runCommand("", conn.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
 }
 
 // Close closes the connection to the lock server.
-func (nm *NetMutex) Close(retries int, timeout time.Duration) error {
-	defer close(nm.done)
-	return nm.runCommand("", nm.commandID(), code.DISCONNECT, timeout, 0, commandID{}, retries)
+func (conn *NetMutexConn) Close(retries int, timeout time.Duration) error {
+	defer close(conn.done)
+	return conn.runCommand("", conn.commandID(), code.DISCONNECT, timeout, 0, commandID{}, retries)
 }
 
-func (nm *NetMutex) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
+func (conn *NetMutexConn) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
 
 	command := getRequest()
 	defer putRequest(command)
@@ -250,17 +250,17 @@ func (nm *NetMutex) runCommand(key string, id commandID, code byte, timeout time
 	command.ttl = ttl
 	command.lockID = lockID
 	command.retries = retries
-	command.netmutex = nm
+	command.conn = conn
 
-	nm.workingCommands.add(command)
-	defer nm.workingCommands.delete(command.id)
+	conn.workingCommands.add(command)
+	defer conn.workingCommands.delete(command.id)
 
 	go command.run()
 
 	return <-command.respChan
 }
 
-func (nm *NetMutex) touch(s *server) {
+func (conn *NetMutexConn) touch(s *server) {
 	command := getRequest()
 	defer putRequest(command)
 
@@ -271,26 +271,26 @@ func (nm *NetMutex) touch(s *server) {
 
 		// выходим из цикла, если клиент закончил свою работу
 		select {
-		case <-nm.done:
+		case <-conn.done:
 			return
 		default:
 		}
 
-		command.id = nm.commandID()
+		command.id = conn.commandID()
 
 		write(s, command) // ответ именно для этого command.id нам не важен, так что не запускаем горутину, ждущую именно этот ответ.
 	}
 }
 
 //  горутины (по числу серверов) читают ответы из своих соединений и направляют их в канал ответов
-func (nm *NetMutex) readResponses(s *server) {
+func (conn *NetMutexConn) readResponses(s *server) {
 
-	go nm.touch(s)
+	go conn.touch(s)
 
 	for {
 		// выходим из цикла, если клиент закончил свою работу
 		select {
-		case <-nm.done:
+		case <-conn.done:
 			s.conn.Close()
 			return
 		default:
@@ -334,7 +334,7 @@ func (nm *NetMutex) readResponses(s *server) {
 		}
 
 		// находим запрос, соотвествующий ответу
-		command, ok := nm.workingCommands.get(resp.id)
+		command, ok := conn.workingCommands.get(resp.id)
 		// если команда не нашлась по ID, то ждём следующую
 		if !ok {
 			putResponse(resp)
@@ -346,42 +346,42 @@ func (nm *NetMutex) readResponses(s *server) {
 }
 
 // пытается открыть соединение
-func (nm *NetMutex) repairConn(server *server) {
+func (conn *NetMutexConn) repairConn(server *server) {
 	for {
 		select {
-		case <-nm.done:
+		case <-conn.done:
 			// выходим из цикла, если клиент закончил свою работу
 			return
 
 		default:
 		}
 
-		conn, err := openConn(server.addr)
+		c, err := openConn(server.addr)
 
 		if err != nil {
 			server.fail()
 			time.Sleep(time.Minute)
 			continue
 		}
-		server.conn = conn
+		server.conn = c
 
-		go nm.readResponses(server)
+		go conn.readResponses(server)
 		return
 	}
 }
 
-func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo string) (*response, error) {
-	conn, err := openConn(addr)
+func (conn *NetMutexConn) connect(addr string, timeout time.Duration, isolationInfo string) (*response, error) {
+	c, err := openConn(addr)
 	if err != nil {
 		return nil, err
 	}
 
-	defer conn.Close()
+	defer c.Close()
 
 	s := &server{
 		id:   0,
 		addr: addr,
-		conn: conn,
+		conn: c,
 	}
 
 	req := &request{
@@ -406,10 +406,10 @@ func (nm *NetMutex) connect(addr string, timeout time.Duration, isolationInfo st
 	return resp, nil
 }
 
-func (nm *NetMutex) ping(s *server, timeout time.Duration) error {
+func (conn *NetMutexConn) ping(s *server, timeout time.Duration) error {
 	req := &request{
 		code: code.PING,
-		id:   nm.commandID(),
+		id:   conn.commandID(),
 	}
 
 	err := write(s, req)
@@ -429,34 +429,34 @@ func (nm *NetMutex) ping(s *server, timeout time.Duration) error {
 	return nil
 }
 
-func (nm *NetMutex) commandID() commandID {
+func (conn *NetMutexConn) commandID() commandID {
 	return commandID{
-		connectionID: nm.nextCommandID.connectionID,
-		requestID:    atomic.AddUint64(&nm.nextCommandID.requestID, 1),
+		connectionID: conn.nextCommandID.connectionID,
+		requestID:    atomic.AddUint64(&conn.nextCommandID.requestID, 1),
 	}
 }
 
 // возвращает лучший из возможных серверов
-func (nm *NetMutex) server() (*server, error) {
-	nm.servers.Lock()
-	defer nm.servers.Unlock()
+func (conn *NetMutexConn) server() (*server, error) {
+	conn.servers.Lock()
+	defer conn.servers.Unlock()
 
-	if nm.servers.current != nil {
-		if atomic.LoadUint32(&nm.servers.current.fails) == 0 { // ToDo переписать. при множестве потерь пакетов это условие редко срабатывает и каждый раз делается перебор серверов
-			return nm.servers.current, nil
+	if conn.servers.current != nil {
+		if atomic.LoadUint32(&conn.servers.current.fails) == 0 { // ToDo переписать. при множестве потерь пакетов это условие редко срабатывает и каждый раз делается перебор серверов
+			return conn.servers.current, nil
 		}
 	}
 
 	var bestFails uint32
 	var bestServer *server
-	for _, s := range nm.servers.m {
+	for _, s := range conn.servers.m {
 		// пропускаем несоединившиеся серверы
 		if s.conn == nil {
 			continue
 		}
 
 		// пропускаем текущий сервер
-		if nm.servers.current == s {
+		if conn.servers.current == s {
 			continue
 		}
 
@@ -473,22 +473,22 @@ func (nm *NetMutex) server() (*server, error) {
 	}
 
 	if bestServer != nil {
-		nm.servers.current = bestServer
-		return nm.servers.current, nil
+		conn.servers.current = bestServer
+		return conn.servers.current, nil
 	}
 	// если лучшего сервера не нашлось, а текущий имеется, то используем текущий сервер
-	if nm.servers.current != nil {
-		return nm.servers.current, nil
+	if conn.servers.current != nil {
+		return conn.servers.current, nil
 	}
 
 	return nil, ErrNoServers
 }
 
-func (nm *NetMutex) serverByID(serverID uint64) *server {
-	nm.servers.Lock()
-	defer nm.servers.Unlock()
+func (conn *NetMutexConn) serverByID(serverID uint64) *server {
+	conn.servers.Lock()
+	defer conn.servers.Unlock()
 
-	if server, ok := nm.servers.m[serverID]; ok {
+	if server, ok := conn.servers.m[serverID]; ok {
 		return server
 	}
 

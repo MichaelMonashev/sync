@@ -55,24 +55,24 @@ func TestMain(m *testing.M) {
 
 // штатная попытка соединения
 func TestOpen1(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	nm.Close(1, time.Minute)
+	conn.Close(1, time.Minute)
 }
 
 // попытаемся соединиться с несуществующим сервером
 // должна произойти ошибка
 func TestOpen2(t *testing.T) {
-	nm, err := Open(10, time.Second, []string{
+	conn, err := Open(10, time.Second, []string{
 		"127.0.0.1:3004"},
 		nil)
 
 	if err == nil {
-		nm.Close(1, time.Second)
+		conn.Close(1, time.Second)
 		t.Fatal()
 	}
 }
@@ -80,20 +80,20 @@ func TestOpen2(t *testing.T) {
 // попытаемся соединиться с сервером, который неправильно понгает
 // у сервера fails должен увеличиться
 func TestOpen3(t *testing.T) {
-	nm, err := Open(10, time.Minute, []string{
+	conn, err := Open(10, time.Minute, []string{
 		"127.0.0.1:3005"},
 		nil)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
-	if len(nm.servers.m) != 1 {
+	if len(conn.servers.m) != 1 {
 		t.FailNow()
 	}
 
-	for _, v := range nm.servers.m {
+	for _, v := range conn.servers.m {
 		if v.fails != 1 {
 			t.Fatal()
 		}
@@ -101,16 +101,16 @@ func TestOpen3(t *testing.T) {
 }
 
 func TestCommandId(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
-	connectionID := nm.nextCommandID.connectionID
-	requestID := atomic.LoadUint64(&nm.nextCommandID.requestID)
+	connectionID := conn.nextCommandID.connectionID
+	requestID := atomic.LoadUint64(&conn.nextCommandID.requestID)
 
-	nextCommandID := nm.commandID()
+	nextCommandID := conn.commandID()
 
 	if !(nextCommandID.connectionID == connectionID && nextCommandID.requestID == requestID+1) {
 		t.Fatal()
@@ -119,12 +119,12 @@ func TestCommandId(t *testing.T) {
 
 // normal operation
 func TestConnect1(t *testing.T) {
-	netmutex := &NetMutex{
+	conn := &NetMutexConn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
 
-	options, err := netmutex.connect("127.0.0.1:3001", time.Minute, "")
+	options, err := conn.connect("127.0.0.1:3001", time.Minute, "")
 
 	if err != nil {
 		t.Fatal(err)
@@ -140,12 +140,12 @@ func TestConnect1(t *testing.T) {
 
 // соединиться с несуществующим сервером
 func TestConnect2(t *testing.T) {
-	netmutex := &NetMutex{
+	conn := &NetMutexConn{
 		done:            make(chan struct{}),
 		workingCommands: newWorkingCommands(),
 	}
 
-	_, err := netmutex.connect("127.0.0.1:3004", time.Second, "")
+	_, err := conn.connect("127.0.0.1:3004", time.Second, "")
 
 	fmt.Println(err)
 	if err == nil {
@@ -155,26 +155,26 @@ func TestConnect2(t *testing.T) {
 
 // Lock/Unlock
 func TestLock1(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	l := nm.NewLock()
+	m := conn.NewMutex()
 	key := "test"
 
 	for i := 1000; i > 0; i-- {
-		err := l.Lock(retries, timeout, key, ttl)
+		err := m.Lock(retries, timeout, key, ttl)
 
 		if err != nil {
 			t.Fatal("can't lock", err)
 		}
 
-		err = l.Unlock(retries, timeout)
+		err = m.Unlock(retries, timeout)
 
 		if err != nil {
 			t.Fatal("can't unlock", err)
@@ -184,19 +184,19 @@ func TestLock1(t *testing.T) {
 
 // long key
 func TestLock2(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	l := nm.NewLock()
+	m := conn.NewMutex()
 	badKey := strings.Repeat("a", 300)
 
-	err = l.Lock(retries, timeout, badKey, ttl)
+	err = m.Lock(retries, timeout, badKey, ttl)
 
 	if err == nil {
 		t.Fatal("must be error")
@@ -208,31 +208,31 @@ func TestLock2(t *testing.T) {
 
 // update
 func TestLockUpdate(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
 	retries := 10
 	timeout := time.Minute
 	ttl := time.Second
-	l := nm.NewLock()
+	m := conn.NewMutex()
 	key := "a"
 
-	err = l.Lock(retries, timeout, key, ttl)
+	err = m.Lock(retries, timeout, key, ttl)
 
 	if err != nil {
 		t.Fatal("can't lock", err)
 	}
 
-	err = l.Update(retries, timeout, ttl)
+	err = m.Update(retries, timeout, ttl)
 
 	if err != nil {
 		t.Fatal("can't update", err)
 	}
 
-	err = l.Unlock(retries, timeout)
+	err = m.Unlock(retries, timeout)
 
 	if err != nil {
 		t.Fatal("can't unlock", err)
@@ -240,16 +240,16 @@ func TestLockUpdate(t *testing.T) {
 }
 
 func TestUlockall(t *testing.T) {
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
 	retries := 10
 	timeout := time.Minute
 
-	err = nm.UnlockAll(retries, timeout)
+	err = conn.UnlockAll(retries, timeout)
 
 	if err != nil {
 		t.Fatal("can't unlock all", err)
@@ -270,11 +270,11 @@ func BenchmarkUDPWrite(b *testing.B) {
 		b.Fatal("ResolveUDPAddr failed:", err)
 	}
 
-	l, err := net.ListenUDP("udp", udpLocalAddr)
+	m, err := net.ListenUDP("udp", udpLocalAddr)
 	if err != nil {
 		b.Fatal("ListenUDP failed:", err)
 	}
-	defer l.Close()
+	defer m.Close()
 
 	sender, err := net.DialUDP("udp", nil, udpLocalAddr)
 	if err != nil {
@@ -300,11 +300,11 @@ func BenchmarkUDPWrite(b *testing.B) {
 
 func BenchmarkParallel(b *testing.B) {
 
-	nm, err := Open(10, time.Minute, addresses, nil)
+	conn, err := Open(10, time.Minute, addresses, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer nm.Close(1, time.Minute)
+	defer conn.Close(1, time.Minute)
 
 	b.SetParallelism(10)
 	//b.SetBytes(10) // это не байты, а количество запросов к серверу: 1 лок, 1 анлок и 8 апдейтов. итого: 10
@@ -314,20 +314,20 @@ func BenchmarkParallel(b *testing.B) {
 		retries := 10
 		timeout := time.Minute
 		ttl := time.Second
-		l := nm.NewLock()
+		m := conn.NewMutex()
 		key := "a"
 		i := 0
 
 		for pb.Next() {
 			i++
 
-			l.Lock(retries, timeout, fmt.Sprint(key, "_", i), ttl)
+			m.Lock(retries, timeout, fmt.Sprint(key, "_", i), ttl)
 
 			for i := 0; i < 8; i++ {
-				l.Update(retries, timeout, ttl)
+				m.Update(retries, timeout, ttl)
 			}
 
-			l.Unlock(retries, timeout)
+			m.Unlock(retries, timeout)
 		}
 	})
 }
