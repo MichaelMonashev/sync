@@ -14,22 +14,22 @@ import (
 
 // Size limits.
 const (
-	// MaxKeySize - maximum key size.
+	// MaxKeySize is the maximum size of the key.
 	MaxKeySize = 255
 
-	// MaxIsolationInfo - maximum length of information for client isolation. Taooka passes it to STDIN of "isolate" programm while client broken.
+	// MaxIsolationInfo - the maximum length of information for client isolation. Taooka passes it to the STDIN program "isolate", while the client is broken.
 	MaxIsolationInfo = 400
 )
 
 // Returned errors.
 var (
-	// ErrDisconnected - the connection was closed.
+	// ErrDisconnected - connection is closed.
 	ErrDisconnected = errors.New("Client connection had closed.")
 
-	// ErrIsolated - the client was isolated. You need to quit the program.
+	// ErrIsolated - the client is isolated. You need to quit the program.
 	ErrIsolated = errors.New("Client had isolated.")
 
-	// ErrLocked - the key was locked by someone else.
+	// ErrLocked - the key is locked by someone else.
 	ErrLocked = errors.New("Key locked.")
 
 	// ErrNoServers - could not connect to any server from the list or all of them became unavailable.
@@ -79,7 +79,7 @@ type Options struct {
 	IsolationInfo string // Information about how the client will be isolated from the data it is changing in case of non-operation.
 }
 
-// NetMutexConn — connection to distributed lock manager.
+// NetMutexConn — connection to the distributed lock manager.
 type NetMutexConn struct {
 	nextCommandID   commandID // должна быть первым полем в структуре, иначе может быть неверное выравнивание и atomic перестанет работать
 	done            chan struct{}
@@ -232,7 +232,7 @@ func (conn *NetMutexConn) UnlockAll(retries int, timeout time.Duration) error {
 	return conn.runCommand("", conn.commandID(), code.UNLOCKALL, timeout, 0, commandID{}, retries)
 }
 
-// Close closes the connection to the lock server.
+// Close closes the connection to the distributed lock manager.
 func (conn *NetMutexConn) Close(retries int, timeout time.Duration) error {
 	defer close(conn.done)
 	return conn.runCommand("", conn.commandID(), code.DISCONNECT, timeout, 0, commandID{}, retries)
