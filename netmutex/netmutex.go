@@ -35,7 +35,7 @@ var (
 	// ErrNoServers - could not connect to any server from the list or all of them became unavailable.
 	ErrNoServers = errors.New("No working servers.")
 
-	// ErrTooMuchRetries - the number of attempts to send a command to the server has been exceeded.
+	// ErrTooMuchRetries - the number of attempts to send a request to the server has been exceeded.
 	ErrTooMuchRetries = errors.New("Too much retries.")
 
 	// ErrLongKey - the key is longer than MaxKeySize bytes.
@@ -160,33 +160,33 @@ func Open(retries int, timeout time.Duration, addrs []string, options *Options) 
 }
 
 // Lock tries to lock the key, making no more retries of attempts, during each waiting for a response from the server during the timeout. If the lock succeeds, it is written to m.
-func (m *Mutex) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) error {
+func (m *Mutex) Lock(retries int, timeout time.Duration, key string, ttl time.Duration) (uint64, error) {
 
 	if m.conn == nil {
-		return errWrongLock
+		return 0, errWrongLock
 	}
 
 	if len(key) > MaxKeySize {
-		return ErrLongKey
+		return 0, ErrLongKey
 	}
 
 	if ttl < 0 {
-		return ErrWrongTTL
+		return 0, ErrWrongTTL
 	}
 
 	conn := m.conn
 
 	id := conn.commandID()
 
-	err := conn.runCommand(key, id, code.LOCK, timeout, ttl, commandID{}, retries)
+	fenceID, err := conn.runCommand2(key, id, code.LOCK, timeout, ttl, commandID{}, retries)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	m.key = key
 	m.commandID = id
 
-	return nil
+	return fenceID, nil
 
 }
 
@@ -238,31 +238,55 @@ func (conn *Conn) Close(retries int, timeout time.Duration) error {
 
 func (conn *Conn) runCommand(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) error {
 
-	command := getRequest()
-	defer putRequest(command)
+	req := getRequest()
+	defer putRequest(req)
 
-	command.id = id
-	command.code = code
-	command.key = key
-	command.timeout = timeout
-	command.ttl = ttl
-	command.lockID = lockID
-	command.retries = retries
-	command.conn = conn
+	req.id = id
+	req.code = code
+	req.key = key
+	req.timeout = timeout
+	req.ttl = ttl
+	req.lockID = lockID
+	req.retries = retries
+	req.conn = conn
 
-	conn.workingCommands.add(command)
-	defer conn.workingCommands.delete(command.id)
+	conn.workingCommands.add(req)
+	defer conn.workingCommands.delete(req.id)
 
-	go command.run()
+	go req.run()
 
-	return <-command.respChan
+	return <-req.respChan
+}
+
+func (conn *Conn) runCommand2(key string, id commandID, code byte, timeout time.Duration, ttl time.Duration, lockID commandID, retries int) (uint64, error) {
+
+	req := getRequest()
+	defer putRequest(req)
+
+	req.id = id
+	req.code = code
+	req.key = key
+	req.timeout = timeout
+	req.ttl = ttl
+	req.lockID = lockID
+	req.retries = retries
+	req.conn = conn
+
+	conn.workingCommands.add(req)
+	defer conn.workingCommands.delete(req.id)
+
+	go req.run()
+
+	err := <-req.respChan
+
+	return req.fenceID, err
 }
 
 func (conn *Conn) touch(s *server) {
-	command := getRequest()
-	defer putRequest(command)
+	req := getRequest()
+	defer putRequest(req)
 
-	command.code = code.TOUCH
+	req.code = code.TOUCH
 
 	for {
 		time.Sleep(10 * time.Minute) // ToDo Вынести в константы
@@ -274,9 +298,9 @@ func (conn *Conn) touch(s *server) {
 		default:
 		}
 
-		command.id = conn.commandID()
+		req.id = conn.commandID()
 
-		write(s, command) // ответ именно для этого command.id нам не важен, так что не запускаем горутину, ждущую именно этот ответ.
+		write(s, req) // ответ именно для этого req.id нам не важен, так что не запускаем горутину, ждущую именно этот ответ.
 	}
 }
 
@@ -332,13 +356,13 @@ func (conn *Conn) readResponses(s *server) {
 		}
 
 		// находим запрос, соотвествующий ответу
-		command, ok := conn.workingCommands.get(resp.id)
+		req, ok := conn.workingCommands.get(resp.id)
 		// если команда не нашлась по ID, то ждём следующую
 		if !ok {
 			putResponse(resp)
 			continue
 		}
-		command.processChan <- resp
+		req.processChan <- resp
 
 	}
 }

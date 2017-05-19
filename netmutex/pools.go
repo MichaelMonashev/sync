@@ -53,6 +53,8 @@ func getRequest() *request {
 func putRequest(req *request) {
 	nilCheck(req)
 
+	req.fenceID = 0
+
 	commandPool.Put(req)
 }
 
@@ -60,21 +62,22 @@ func putRequest(req *request) {
 var responsePool sync.Pool
 
 func getResponse() *response {
-	r := responsePool.Get()
-	if r == nil {
+	resp := responsePool.Get()
+	if resp == nil {
 		return &response{
 			servers: make(map[uint64]string),
 		}
 	}
-	return r.(*response)
+	return resp.(*response)
 }
 
-func putResponse(r *response) {
-	nilCheck(r)
+func putResponse(resp *response) {
+	nilCheck(resp)
 
-	for s := range r.servers {
-		delete(r.servers, s)
+	for s := range resp.servers {
+		delete(resp.servers, s)
 	}
+	resp.fenceID = 0
 
-	responsePool.Put(r)
+	responsePool.Put(resp)
 }

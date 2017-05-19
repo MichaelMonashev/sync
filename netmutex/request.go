@@ -32,24 +32,13 @@ type request struct {
 	timer         *time.Timer    // таймер текущего запроса
 	retries       int            // количество запросов к серверам, прежде чем вернуть ошибку
 	isolationInfo string         // информация об изоляции клиента
+	fenceID       uint64         // номер блокировки
 	code          byte           // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
 
 type commandID struct {
 	connectionID uint64
 	requestID    uint64
-}
-
-func (req *request) marshalPacket(buf []byte) (int, error) {
-
-	n, err := req.marshalCommand(buf[protocolHeaderSize:])
-	if err != nil {
-		return 0, err
-	}
-
-	addHeaderAndTail(buf, n)
-
-	return protocolHeaderSize + n + protocolTailSize, nil
 }
 
 func addHeaderAndTail(buf []byte, n int) {
@@ -65,6 +54,18 @@ func addHeaderAndTail(buf []byte, n int) {
 	// записываем контрольную сумму
 	chsum := checksum.Checksum(buf[:protocolHeaderSize+n])
 	copy(buf[protocolHeaderSize+n:], chsum[:])
+}
+
+func (req *request) marshalPacket(buf []byte) (int, error) {
+
+	n, err := req.marshalCommand(buf[protocolHeaderSize:])
+	if err != nil {
+		return 0, err
+	}
+
+	addHeaderAndTail(buf, n)
+
+	return protocolHeaderSize + n + protocolTailSize, nil
 }
 
 func (req *request) marshalCommand(buf []byte) (int, error) {
@@ -294,6 +295,11 @@ func (req *request) process(resp *response) bool {
 	switch resp.code {
 	case code.OK:
 		req.currentServer.ok()
+		req.respChan <- nil
+
+	case code.OK2:
+		req.currentServer.ok()
+		req.fenceID = resp.fenceID
 		req.respChan <- nil
 
 	case code.DISCONNECTED:

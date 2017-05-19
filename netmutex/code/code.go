@@ -21,6 +21,7 @@ const (
 	PONG           // response to the PING request
 
 	OK           // request done
+	OK2          // request done + fenceID returned
 	DISCONNECTED // the client was disconnected before the request
 	ISOLATED     // the client was isolated. You need to quit the program
 	LOCKED       // key was locked by someone else

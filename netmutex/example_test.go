@@ -38,11 +38,13 @@ func Example() {
 	ttl := time.Minute
 
 	// Try to lock key
-	err = mutex.Lock(retries, timeout, key, ttl)
+	fenceID, err := mutex.Lock(retries, timeout, key, ttl)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
+
+	_ = fenceID // fo prevent error: "fenceID declared and not used"
 
 	var done uint32
 

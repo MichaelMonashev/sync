@@ -162,17 +162,28 @@ func TestLock1(t *testing.T) {
 	defer conn.Close(1, time.Minute)
 
 	retries := 10
-	timeout := time.Minute
+	timeout := time.Second
 	ttl := time.Second
 	m := conn.NewMutex()
 	key := "test"
 
+	var lastFenceID uint64
+
 	for i := 1000; i > 0; i-- {
-		err := m.Lock(retries, timeout, key, ttl)
+		fenceID, err := m.Lock(retries, timeout, key, ttl)
 
 		if err != nil {
 			t.Fatal("can't lock", err)
 		}
+
+		if fenceID == 0 {
+			t.Fatal("fenceID == 0")
+		}
+
+		if fenceID <= lastFenceID {
+			t.Fatal("fenceID <= lastFenceID:", fenceID, lastFenceID)
+		}
+		lastFenceID = fenceID
 
 		err = m.Unlock(retries, timeout)
 
@@ -196,10 +207,13 @@ func TestLock2(t *testing.T) {
 	m := conn.NewMutex()
 	badKey := strings.Repeat("a", 300)
 
-	err = m.Lock(retries, timeout, badKey, ttl)
+	fenceID, err := m.Lock(retries, timeout, badKey, ttl)
 
 	if err == nil {
 		t.Fatal("must be error")
+	}
+	if fenceID != 0 {
+		t.Fatal("fenceID != 0")
 	}
 	if err != ErrLongKey {
 		t.Fatal("expecting ErrLongKey, got", err)
@@ -215,15 +229,18 @@ func TestLockUpdate(t *testing.T) {
 	defer conn.Close(1, time.Minute)
 
 	retries := 10
-	timeout := time.Minute
+	timeout := time.Second
 	ttl := time.Second
 	m := conn.NewMutex()
 	key := "a"
 
-	err = m.Lock(retries, timeout, key, ttl)
+	fenceID, err := m.Lock(retries, timeout, key, ttl)
 
 	if err != nil {
 		t.Fatal("can't lock", err)
+	}
+	if fenceID == 0 {
+		t.Fatal("fenceID == 0")
 	}
 
 	err = m.Update(retries, timeout, ttl)
@@ -423,7 +440,7 @@ func mockProccessReq(b *byteBuffer, n int, serverID uint64, moskServers map[uint
 			pos += 1 + 16
 
 		case code.LOCK:
-			mockOk(conn, addr, b.buf[pos:])
+			mockOk2(conn, addr, b.buf[pos:])
 			pos += 1 + 16 + 8 + 1 + int(b.buf[pos+25])
 
 		case code.UPDATE:
@@ -515,6 +532,35 @@ func mockOk(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
 	copy(b.buf[protocolHeaderSize+1+16:], chsum[:])
 
 	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+1+16+protocolTailSize], addr)
+	if err != nil {
+		warn(err)
+	}
+}
+
+func mockOk2(conn *net.UDPConn, addr *net.UDPAddr, reqB []byte) {
+	b := getByteBuffer()
+	defer putByteBuffer(b)
+
+	// записываем версию
+	b.buf[0] = 1
+
+	// записываем флаги
+	b.buf[1] = 0 // одиночный пакет
+
+	b.buf[protocolHeaderSize+0] = code.OK2
+
+	copy(b.buf[protocolHeaderSize+1:], reqB[1:16])
+
+	copy(b.buf[protocolHeaderSize+17:], reqB[9:16]) // в fenceID копируем requestID
+
+	// записываем длину
+	binary.LittleEndian.PutUint16(b.buf[2:], uint16(protocolHeaderSize+1+16+8+protocolTailSize))
+
+	// записываем контрольную сумму
+	chsum := checksum.Checksum(b.buf[:protocolHeaderSize+1+16+8])
+	copy(b.buf[protocolHeaderSize+1+16+8:], chsum[:])
+
+	_, err := conn.WriteToUDP(b.buf[:protocolHeaderSize+1+16+8+protocolTailSize], addr)
 	if err != nil {
 		warn(err)
 	}

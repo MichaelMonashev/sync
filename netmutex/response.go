@@ -12,6 +12,7 @@ type response struct {
 	id          commandID         // уникальный номер команды
 	servers     map[uint64]string // список серверов при OPTIONS
 	serverID    uint64            // номер сервера при REDIRECT
+	fenceID     uint64            // номер блокировки
 	description string            // описание ошибки при ERROR
 	code        byte              // код команды. Должно быть в хвосте структуры, ибо портит выравнивание всех остальных полей
 }
@@ -123,6 +124,14 @@ func (resp *response) unmarshalCommand(buf []byte) error {
 		}
 		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
 		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
+
+	case code.OK2:
+		if len(buf) != 25 {
+			return errWrongResponse //Errorln("wrong packet size", bufSize, "in OK2")
+		}
+		resp.id.connectionID = binary.LittleEndian.Uint64(buf[1:])
+		resp.id.requestID = binary.LittleEndian.Uint64(buf[9:])
+		resp.fenceID = binary.LittleEndian.Uint64(buf[17:])
 
 	case code.REDIRECT:
 		if len(buf) != 25 {

@@ -24,6 +24,9 @@ func write(s *server, req *request) error {
 	// если сервер перегружен, то перед отправкой запроса сделаем небольшую паузу пропорционально его нагруженности
 	serverBusy := atomic.LoadInt32(&s.busy)
 	if serverBusy > 0 {
+		if serverBusy > maxBusy {
+			serverBusy = maxBusy
+		}
 		time.Sleep(time.Duration(serverBusy) * busyStep)
 	}
 
@@ -62,7 +65,7 @@ func read(s *server) (*response, error) {
 	response := getResponse()
 	busy, err := response.unmarshalPacket(b.buf[:n])
 	if busy {
-		if atomic.LoadInt32(&s.busy) < maxBusy { // s.busy может стать немножко больше maxBusy, но не кардинально, так что это не сташно
+		if atomic.LoadInt32(&s.busy) < maxBusy { // s.busy может стать немножко больше maxBusy, но не кардинально, так что это не сташно, плюс при задании паузы мы это учтём
 			atomic.AddInt32(&s.busy, 1) // ToDo: в зависимости от s.busy прибавлять разное число. 1 соотвествует 10 микросекундам паузы перед обращением к серверу.
 		}
 	} else if atomic.LoadInt32(&s.busy) > 0 { // s.busy может немножко уйти в минус, но при задании паузы мы это учтём
